@@ -54,6 +54,8 @@ import HomePage from "./pages/HomePage";
 import PurchaseBillsPage from "./pages/PurchaseBillsPage";
 import PaymentOutPage from "./pages/PaymentOutPage";
 import PurchaseReturnPage from "./pages/PurchaseReturnPage";
+import PurchasesPage from "./pages/PurchasesPage";
+
 
 export default function App() {
   return (

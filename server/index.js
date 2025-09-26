@@ -10,6 +10,7 @@ const mysql = require("mysql2/promise");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const partiesRouter = require('./routes/parties');
+const purchasesRouter = require('./routes/purchases');
 
 const app = express();
 app.use(cors());
@@ -17,6 +18,7 @@ app.use(bodyParser.json());
 app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use("/api/parties", partiesRouter);
+app.use('/api/purchases', purchasesRouter);
 
 // Create pool
 const pool = mysql.createPool({
@@ -52,6 +54,12 @@ app.get("/api/_dbinfo", async (req, res) => {
     console.error("dbinfo error", err);
     return res.status(500).json({ ok: false, error: err.message });
   }
+});
+
+// in server file, e.g. server/index.js or routes/test.js
+app.get('/api/purchases', (req, res) => {
+  // Temporary placeholder while backend logic is implemented
+  res.json([]);
 });
 
 // GET /api/invoices - list invoices (join party name if exists)

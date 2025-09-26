@@ -1,72 +1,91 @@
-import React, { useState } from "react";
-import SharedTable from "../components/SharedTable";
-import AddItemModal from "../components/AddItemModal";
+import React, { useEffect, useState } from "react";
+import { fetchItems, createItem, updateItem } from "../api";
+import ItemModal from "../components/ItemModal";
 import AppLayout from "../components/AppLayout";
 
 export default function ItemsPage() {
-  const [items, setItems] = useState([
-    { id: "it1", name: "Product A", sku: "PA-001", rate: 499, stock: 10 },
-  ]);
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+  const [saving, setSaving] = useState(false);
 
-  function handleAdd() {
-    setEditing(null);
-    setOpen(true);
-  }
-
-  function handleEdit(row) {
-    setEditing(row);
-    setOpen(true);
-  }
-
-  function handleSave(saved) {
-    if (!saved) return setOpen(false);
-    if (saved.id && items.some((r) => r.id === saved.id)) {
-      setItems(items.map((r) => (r.id === saved.id ? saved : r)));
-    } else {
-      setItems([saved, ...items]);
+  const fetchList = async () => {
+    setLoading(true);
+    try {
+      const data = await fetchItems();
+      setItems(data);
+    } catch (err) {
+      console.error("fetchItems error", err);
+    } finally {
+      setLoading(false);
     }
-    setOpen(false);
-  }
+  };
 
-  const columns = [
-    { key: "name", label: "Item" },
-    { key: "sku", label: "SKU" },
-    { key: "rate", label: "Rate" },
-    { key: "stock", label: "Stock" },
-  ];
+  useEffect(() => {
+    fetchList();
+  }, []);
+
+  const onSave = async (formData) => {
+    setSaving(true);
+    try {
+      if (editingItem?.id) {
+        await updateItem(editingItem.id, formData);
+      } else {
+        await createItem(formData);
+      }
+      await fetchList();
+      setModalOpen(false);
+      setEditingItem(null);
+    } catch (e) {
+      console.error("Item save failed", e);
+      alert("Save failed: " + (e?.message || "Unknown error"));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <AppLayout>
-    <div className="p-6">
+    <div className="p-4">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-semibold">Items</h1>
-        <div>
-          <button className="px-4 py-2 rounded bg-amber-500 text-white" onClick={handleAdd}>
-            + Add Item
-          </button>
-        </div>
+        <h2 className="text-lg font-semibold">Items</h2>
+        <button
+          className="px-3 py-1 rounded bg-blue-600 text-white"
+          onClick={() => { setEditingItem(null); setModalOpen(true); }}
+        >
+          Add Item
+        </button>
       </div>
 
-      <div className="bg-white rounded shadow p-4">
-        <SharedTable
-          columns={columns}
-          data={items}
-          actions={(row) => (
-            <>
-              <button className="px-2 py-1 border rounded mr-2" onClick={() => handleEdit(row)}>
-                Edit
-              </button>
-              <button className="px-2 py-1 border rounded" onClick={() => setItems(items.filter((r) => r.id !== row.id))}>
-                Delete
-              </button>
-            </>
-          )}
-        />
-      </div>
+      <ItemModal
+        open={modalOpen}
+        onClose={() => !saving && setModalOpen(false)}
+        item={editingItem}
+        onSave={onSave}
+        saving={saving}
+      />
 
-      {open && <AddItemModal open={open} initial={editing} onClose={() => setOpen(false)} onSaved={handleSave} />}
+      {loading ? (
+        <p>Loading…</p>
+      ) : (
+        <table className="min-w-full bg-white">
+          <thead>
+            <tr>
+              <th className="text-left px-4 py-2">Name</th>
+              <th className="text-left px-4 py-2">Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((it) => (
+              <tr key={it.id} className="hover:bg-gray-50">
+                <td className="px-4 py-2">{it.name}</td>
+                <td className="px-4 py-2">{Number.isFinite(Number(it.rate)) ? Number(it.rate).toFixed(2) : "-"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
     </AppLayout>
   );

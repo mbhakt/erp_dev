@@ -1,9 +1,12 @@
+// src/components/SharedTable.jsx
 import React from "react";
 
 /**
  * Simple SharedTable
  * Props:
- *  - columns: [{ key, label }]
+ *  - columns: [{ key, label, render? }]
+ *    - label may be a string or JSX node
+ *    - render (optional) is a function(row) => ReactNode that overrides row[key]
  *  - data: array of row objects
  *  - actions: function(row) => ReactNode
  */
@@ -14,7 +17,10 @@ export default function SharedTable({ columns = [], data = [], actions = () => n
         <thead className="text-left text-slate-600 bg-slate-50">
           <tr>
             {columns.map((c) => (
-              <th key={c.key} className="px-4 py-3">{c.label}</th>
+              // label might be JSX or string; keep header cell classes but allow right aligned label
+              <th key={c.key} className="px-4 py-3">
+                {c.label}
+              </th>
             ))}
             <th className="px-4 py-3 text-right">Actions</th>
           </tr>
@@ -29,13 +35,20 @@ export default function SharedTable({ columns = [], data = [], actions = () => n
           ) : (
             data.map((row) => (
               <tr key={row.id} className="border-t">
-                {columns.map((c) => (
-                  <td key={c.key} className="px-4 py-3">{row[c.key]}</td>
-                ))}
+                {columns.map((c) => {
+                  // If column provides a render function, call it with the row.
+                  // Otherwise fallback to row[c.key].
+                  const content = typeof c.render === "function" ? c.render(row) : row[c.key];
+                  return (
+                    <td key={c.key} className="px-4 py-3">
+                      {content}
+                    </td>
+                  );
+                })}
                 <td className="px-4 py-3 text-right">
                   {actions(row)}
                 </td>
-             </tr>
+              </tr>
             ))
           )}
         </tbody>

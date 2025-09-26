@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import AppLayout from "../components/AppLayout";
 import PurchaseModal from "../components/PurchaseModal";
- import {
+import {
   fetchPurchases,
   createPurchase,
   updatePurchase,
@@ -14,6 +14,7 @@ export default function PurchaseBillsPage() {
   const [loading, setLoading] = useState(false);
   const [localModalOpen, setLocalModalOpen] = useState(false);
   const [localEditPurchase, setLocalEditPurchase] = useState(null);
+  const [saving, setSaving] = useState(false); // new saving state
 
   async function fetchPurchasesList() {
     setLoading(true);
@@ -32,12 +33,12 @@ export default function PurchaseBillsPage() {
     fetchPurchasesList();
   }, []);
 
-  async function handleAddPurchase() {
+  function handleAddPurchase() {
     setLocalEditPurchase(null);
     setLocalModalOpen(true);
   }
 
-  async function handleEditPurchase(purchase) {
+  function handleEditPurchase(purchase) {
     setLocalEditPurchase(purchase);
     setLocalModalOpen(true);
   }
@@ -52,11 +53,32 @@ export default function PurchaseBillsPage() {
     }
   }
 
+  // Called after successful save to refresh and close modal
   function handleLocalSaved() {
     setLocalModalOpen(false);
     setLocalEditPurchase(null);
     fetchPurchasesList();
   }
+
+  // NEW: onSave function passed to PurchaseModal (fixes onSave is not a function)
+  const onSave = async (formData) => {
+    setSaving(true);
+    try {
+      if (localEditPurchase && localEditPurchase.id) {
+        await updatePurchase(localEditPurchase.id, formData);
+      } else {
+        await createPurchase(formData);
+      }
+      // refresh list and close modal
+      handleLocalSaved();
+    } catch (err) {
+      console.error("Purchase save failed:", err);
+      // rethrow if you want the modal to handle errors, or just keep it logged
+      throw err;
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <AppLayout>
@@ -99,8 +121,8 @@ export default function PurchaseBillsPage() {
                         : "-"}
                     </td>
                     <td className="p-2 border text-right">
-                      {Number(p.total_amount || 0).toFixed(2)}
-                    </td>
+  {Number(p.grand_total || p.total_amount || 0).toFixed(2)}
+</td>
                     <td className="p-2 border">
                       <button
                         className="text-sm text-blue-600 hover:underline mr-2"
@@ -130,7 +152,8 @@ export default function PurchaseBillsPage() {
               setLocalModalOpen(false);
               setLocalEditPurchase(null);
             }}
-            onSaved={handleLocalSaved}
+            onSave={onSave}            // now passes the function the modal expects
+            saving={saving}            // pass saving state so modal can disable Save
           />
         )}
       </div>

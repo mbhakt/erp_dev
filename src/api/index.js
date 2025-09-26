@@ -30,21 +30,21 @@ export const updateInvoice = (id, payload) => unwrap(api.put(`/invoices/${encode
 
 export const deleteInvoice = (id) => unwrap(api.delete(`/invoices/${encodeURIComponent(id)}`));
 
-/* ---------- Parties ---------- */
+/* ------------------ Parties ------------------ */
 export const fetchParties = (params = {}) => unwrap(api.get("/parties", { params }));
 export const fetchParty = (id) => unwrap(api.get(`/parties/${encodeURIComponent(id)}`));
 export const createParty = (payload) => unwrap(api.post("/parties", payload));
 export const updateParty = (id, payload) => unwrap(api.put(`/parties/${encodeURIComponent(id)}`, payload));
 export const deleteParty = (id) => unwrap(api.delete(`/parties/${encodeURIComponent(id)}`));
 
-/* ---------- Items ---------- */
+/* ------------------ Items ------------------ */
 export const fetchItems = (params = {}) => unwrap(api.get("/items", { params }));
 export const fetchItem = (id) => unwrap(api.get(`/items/${encodeURIComponent(id)}`));
 export const createItem = (payload) => unwrap(api.post("/items", payload));
 export const updateItem = (id, payload) => unwrap(api.put(`/items/${encodeURIComponent(id)}`, payload));
 export const deleteItem = (id) => unwrap(api.delete(`/items/${encodeURIComponent(id)}`));
 
-/* ---------- Purchases (optional) ---------- */
+/* ------------------ Purchases ------------------ */
 export const fetchPurchases = (params = {}) => unwrap(api.get("/purchases", { params }));
 export const fetchPurchase = (id) => unwrap(api.get(`/purchases/${encodeURIComponent(id)}`));
 export const createPurchase = (payload) => unwrap(api.post("/purchases", payload));
