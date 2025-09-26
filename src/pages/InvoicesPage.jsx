@@ -106,7 +106,7 @@ function computeInvoiceTotal(invoice) {
     }
   }
 
-  // 7) Debug: print a trimmed sample to console for adaptation if still zero
+  // 7) Debug: print a trimmed sample to console so we can adapt if still zero
   // eslint-disable-next-line no-console
   console.debug("computeInvoiceTotal: could not determine total for invoice sample:", {
     id: invoice.id ?? invoice._id ?? invoice.invoice_no,

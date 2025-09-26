@@ -1,5 +1,5 @@
 // src/components/InvoiceForm.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   fetchParties,
   fetchItems,
@@ -9,9 +9,7 @@ import {
   fetchInvoices,
 } from "../api";
 
-/* ---------- Helpers ---------- */
-
-// Format a Date/ISO to DD-MM-YYYY
+/* Helpers */
 function formatIndianDate(isoOrDate) {
   if (!isoOrDate) return "";
   const d = new Date(isoOrDate);
@@ -21,8 +19,6 @@ function formatIndianDate(isoOrDate) {
   const yyyy = d.getFullYear();
   return `${dd}-${mm}-${yyyy}`;
 }
-
-// Format for input[type=date] (yyyy-mm-dd)
 function fmtDateForInput(isoOrDate) {
   if (!isoOrDate) return "";
   const d = new Date(isoOrDate);
@@ -32,14 +28,11 @@ function fmtDateForInput(isoOrDate) {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
-
 function parseInvoiceNoNumber(invNo) {
   if (!invNo) return NaN;
-  // grabs last sequence of digits as numeric suffix
   const m = String(invNo).match(/(\d+)\s*$/);
   return m ? Number(m[1]) : NaN;
 }
-
 function computeRowAmount(row) {
   const qty = Number(row.qty || 0);
   const rate = Number(row.unit_price || row.price || 0);
@@ -48,55 +41,49 @@ function computeRowAmount(row) {
   return Number.isNaN(amt) ? 0 : amt;
 }
 
-/* ---------- Component ---------- */
-
+/* Component */
 export default function InvoiceForm({ invoiceId = null, onSaved = null, onCancel = null }) {
   const [parties, setParties] = useState([]);
   const [itemsMaster, setItemsMaster] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // form state
-  const [form, setForm] = useState({
+  const initialForm = {
     invoice_no: "",
     party_id: "",
     invoice_date: fmtDateForInput(new Date()),
     notes: "",
-  });
-
+  };
+  const [form, setForm] = useState(initialForm);
   const [rows, setRows] = useState([{ item_id: "", qty: 1, unit_price: 0, discount: 0 }]);
   const [lastInvoiceNumeric, setLastInvoiceNumeric] = useState(null);
 
-  // load parties + items
+  const mountedRef = useRef(false);
+
   useEffect(() => {
     fetchParties().then((r) => setParties(Array.isArray(r) ? r : (r.data || []))).catch(() => setParties([]));
     fetchItems().then((r) => setItemsMaster(Array.isArray(r) ? r : (r.data || []))).catch(() => setItemsMaster([]));
   }, []);
 
-  // load last invoice numeric suffix to propose next invoice number
+  // propose next invoice no only if form.invoice_no is empty (prevents overriding when editing)
   useEffect(() => {
     async function loadLast() {
       try {
-        // try to ask backend for last invoice (limit=1 sort=-invoice_no)
         const res = await fetchInvoices({ limit: 1, sort: "-invoice_no" }).catch(() => null);
         let arr = [];
         if (res) {
-          // res might be array or { data: [...] } etc
           if (Array.isArray(res)) arr = res;
           else if (Array.isArray(res.data)) arr = res.data;
           else if (Array.isArray(res.invoices)) arr = res.invoices;
         }
-
-        // fallback: if empty, do nothing
         if (arr.length > 0) {
-          // pick numeric suffix
           const first = arr[0];
           const invNo = first.invoice_no ?? first.invoiceNo ?? "";
           const n = parseInvoiceNoNumber(invNo);
           if (!Number.isNaN(n)) {
             setLastInvoiceNumeric(n);
-            if (!invoiceId) {
-              // propose next invoice no like INV-<n+1> using same prefix if possible
+            // propose only if not editing and invoice_no empty
+            if (!invoiceId && !form.invoice_no) {
               const m = String(invNo).match(/^(.*?)(\d+)\s*$/);
               if (m) {
                 const prefix = m[1] || "INV-";
@@ -108,35 +95,29 @@ export default function InvoiceForm({ invoiceId = null, onSaved = null, onCancel
             }
           }
         } else {
-          // no invoices found -> set default format
-          if (!invoiceId) setForm((f) => ({ ...f, invoice_no: `INV-1` }));
+          if (!invoiceId && !form.invoice_no) setForm((f) => ({ ...f, invoice_no: `INV-1` }));
         }
-      } catch (err) {
-        // ignore
-      }
+      } catch (err) {}
     }
     loadLast();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoiceId]);
 
-  // load invoice if editing
+  // load invoice details when editing
   useEffect(() => {
     if (!invoiceId) return;
     setLoading(true);
     (async () => {
       try {
         const payload = await fetchInvoice(invoiceId);
-        // payload may be { data: invoice } or invoice directly
         const invoice = payload && payload.invoice ? payload.invoice : (payload.data ? payload.data : payload);
-        if (!invoice) throw new Error("No invoice returned from API");
-
+        if (!invoice) throw new Error("No invoice returned");
         setForm({
           invoice_no: invoice.invoice_no ?? invoice.invoiceNo ?? "",
           party_id: String(invoice.party_id ?? invoice.partyId ?? invoice.party_id ?? ""),
           invoice_date: fmtDateForInput(invoice.invoice_date ?? invoice.invoiceDate ?? invoice.created_at ?? new Date()),
           notes: invoice.notes ?? "",
         });
-
-        // normalize items: invoice.items, invoice.invoice_items, etc.
         const itemsList = invoice.items ?? invoice.invoice_items ?? invoice.rows ?? invoice.items_list ?? [];
         if (Array.isArray(itemsList) && itemsList.length > 0) {
           const normalized = itemsList.map((it) => ({
@@ -150,22 +131,27 @@ export default function InvoiceForm({ invoiceId = null, onSaved = null, onCancel
           setRows([{ item_id: "", qty: 1, unit_price: 0, discount: 0 }]);
         }
       } catch (err) {
-        console.error("Failed to load invoice for editing", err);
-        alert("Failed to load invoice. See console for details.");
+        console.error("Failed to load invoice", err);
       } finally {
         setLoading(false);
       }
     })();
   }, [invoiceId]);
 
-  // compute invoice total
-  const total = useMemo(() => {
-    return rows.reduce((acc, r) => {
-      const amt = computeRowAmount(r);
-      // careful digit-by-digit addition (JS numbers are fine here, but keeping safe)
-      return acc + (Number.isNaN(amt) ? 0 : amt);
-    }, 0);
-  }, [rows]);
+  // fill unit price from master
+  useEffect(() => {
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.item_id && (!r.unit_price || Number(r.unit_price) === 0)) {
+          const it = itemsMaster.find((x) => String(x.id) === String(r.item_id) || String(x.item_id) === String(r.item_id));
+          return { ...r, unit_price: Number(it?.sale_price ?? it?.price ?? it?.rate ?? 0) || r.unit_price };
+        }
+        return r;
+      })
+    );
+  }, [itemsMaster]);
+
+  const total = useMemo(() => rows.reduce((acc, r) => acc + computeRowAmount(r), 0), [rows]);
 
   function updateRow(idx, changes) {
     setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...changes } : r)));
@@ -177,38 +163,34 @@ export default function InvoiceForm({ invoiceId = null, onSaved = null, onCancel
     setRows((r) => r.filter((_, i) => i !== idx));
   }
 
-  function findItemPrice(itemId) {
-    const it = itemsMaster.find((x) => String(x.id) === String(itemId) || String(x.item_id) === String(itemId));
-    if (!it) return 0;
-    return Number(it.sale_price ?? it.price ?? it.rate ?? 0);
-  }
-
-  // when items master loads, if any row has item but unit_price 0, fill with master price
-  useEffect(() => {
-    setRows((prev) =>
-      prev.map((r) => {
-        if (r.item_id && (!r.unit_price || Number(r.unit_price) === 0)) {
-          return { ...r, unit_price: findItemPrice(r.item_id) || r.unit_price };
-        }
-        return r;
-      })
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [itemsMaster]);
-
   async function handleSave() {
-    // validations
-    if (!form.party_id) return alert("Please select a party.");
-    if (!form.invoice_no) return alert("Invoice number required.");
-    if (!rows.length) return alert("Add at least one item.");
+    // prevent double submit
+    if (saving) return;
+    setSaving(true);
 
-    // when creating, validate numeric suffix = lastInvoiceNumeric + 1 (if we have lastInvoiceNumeric)
+    // validations
+    if (!form.party_id) {
+      setSaving(false);
+      return alert("Please select a party.");
+    }
+    if (!form.invoice_no) {
+      setSaving(false);
+      return alert("Invoice number required.");
+    }
+    if (!rows.length) {
+      setSaving(false);
+      return alert("Add at least one item.");
+    }
+
+    // invoice number validation on create only
     if (!invoiceId && lastInvoiceNumeric !== null) {
       const numeric = parseInvoiceNoNumber(form.invoice_no);
       if (Number.isNaN(numeric)) {
+        setSaving(false);
         return alert("Invoice number must contain a numeric suffix (e.g. INV-101).");
       }
       if (numeric !== lastInvoiceNumeric + 1) {
+        setSaving(false);
         return alert(`Invoice numeric suffix must be previous invoice number +1. Previous: ${lastInvoiceNumeric}. Your invoice numeric part should be ${lastInvoiceNumeric + 1}.`);
       }
     }
@@ -216,7 +198,7 @@ export default function InvoiceForm({ invoiceId = null, onSaved = null, onCancel
     const payload = {
       invoice_no: form.invoice_no,
       party_id: form.party_id,
-      invoice_date: form.invoice_date, // yyyy-mm-dd
+      invoice_date: form.invoice_date,
       notes: form.notes,
       total: Number(total || 0),
       items: rows.map((r) => ({
@@ -228,7 +210,6 @@ export default function InvoiceForm({ invoiceId = null, onSaved = null, onCancel
       })),
     };
 
-    setSaving(true);
     try {
       let res;
       if (invoiceId) {
@@ -236,13 +217,31 @@ export default function InvoiceForm({ invoiceId = null, onSaved = null, onCancel
       } else {
         res = await createInvoice(payload);
       }
+
       alert("Saved successfully.");
-      if (typeof onSaved === "function") onSaved(res);
+
+      // If parent provided onSaved callback, call it. Otherwise dispatch an event and reload as fallback.
+      if (typeof onSaved === "function") {
+        try { onSaved(res); } catch (e) {}
+      } else {
+        try { window.dispatchEvent(new CustomEvent("invoice:saved", { detail: res })); } catch (e) {}
+        try { window.location.reload(); } catch (e) {}
+      }
     } catch (err) {
       console.error("Save failed", err);
       alert("Save failed. See console/network/server logs.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  // fallback cancel behavior
+  function handleCancel() {
+    if (typeof onCancel === "function") {
+      try { onCancel(); } catch (e) {}
+    } else {
+      try { window.dispatchEvent(new CustomEvent("invoice:cancel")); } catch (e) {}
+      try { window.location.reload(); } catch (e) {}
     }
   }
 
@@ -322,7 +321,8 @@ export default function InvoiceForm({ invoiceId = null, onSaved = null, onCancel
                       value={r.item_id}
                       onChange={(e) => {
                         const id = e.target.value;
-                        const price = findItemPrice(id);
+                        const it = itemsMaster.find((x) => String(x.id) === String(id) || String(x.item_id) === String(id));
+                        const price = Number(it?.sale_price ?? it?.price ?? it?.rate ?? 0) || r.unit_price;
                         updateRow(idx, { item_id: id, unit_price: price || r.unit_price });
                       }}
                     >
@@ -382,12 +382,7 @@ export default function InvoiceForm({ invoiceId = null, onSaved = null, onCancel
           <button className="px-4 py-2 bg-blue-600 text-white rounded mr-2" onClick={handleSave} disabled={saving}>
             {saving ? "Saving..." : "Save"}
           </button>
-          <button
-            className="px-4 py-2 border rounded"
-            onClick={() => {
-              if (typeof onCancel === "function") onCancel();
-            }}
-          >
+          <button className="px-4 py-2 border rounded" onClick={handleCancel}>
             Cancel
           </button>
         </div>
