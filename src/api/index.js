@@ -8,62 +8,47 @@ const api = axios.create({
   headers: { "Content-Type": "application/json" },
 });
 
-/* ------------------ Invoices ------------------ */
-export const fetchInvoices = () =>
-  api.get("/invoices").then((r) => r.data);
+async function unwrap(promise) {
+  const res = await promise;
+  // many servers return { data: ... } or res.data directly
+  if (res && res.data !== undefined) return res.data;
+  return res;
+}
 
-export const fetchInvoice = (id) =>
-  api.get(`/invoices/${id}`).then((r) => r.data);
+/* ---------- Invoices ---------- */
+/**
+ * fetchInvoices(params) where params is optional object used as query params
+ * e.g. fetchInvoices({ limit: 1, sort: "-invoice_no" })
+ */
+export const fetchInvoices = (params = {}) => unwrap(api.get("/invoices", { params }));
 
-export const createInvoice = (payload) =>
-  api.post("/invoices", payload).then((r) => r.data);
+export const fetchInvoice = (id) => unwrap(api.get(`/invoices/${encodeURIComponent(id)}`));
 
-export const updateInvoice = (id, payload) =>
-  api.put(`/invoices/${id}`, payload).then((r) => r.data);
+export const createInvoice = (payload) => unwrap(api.post("/invoices", payload));
 
-export const deleteInvoice = (id) =>
-  api.delete(`/invoices/${id}`).then((r) => r.data);
+export const updateInvoice = (id, payload) => unwrap(api.put(`/invoices/${encodeURIComponent(id)}`, payload));
 
-/* ------------------ Parties ------------------ */
-export const fetchParties = () =>
-  api.get("/parties").then((r) => r.data);
+export const deleteInvoice = (id) => unwrap(api.delete(`/invoices/${encodeURIComponent(id)}`));
 
-export const createParty = (payload) =>
-  api.post("/parties", payload).then((r) => r.data);
+/* ---------- Parties ---------- */
+export const fetchParties = (params = {}) => unwrap(api.get("/parties", { params }));
+export const fetchParty = (id) => unwrap(api.get(`/parties/${encodeURIComponent(id)}`));
+export const createParty = (payload) => unwrap(api.post("/parties", payload));
+export const updateParty = (id, payload) => unwrap(api.put(`/parties/${encodeURIComponent(id)}`, payload));
+export const deleteParty = (id) => unwrap(api.delete(`/parties/${encodeURIComponent(id)}`));
 
-export const updateParty = (id, payload) =>
-  api.put(`/parties/${id}`, payload).then((r) => r.data);
+/* ---------- Items ---------- */
+export const fetchItems = (params = {}) => unwrap(api.get("/items", { params }));
+export const fetchItem = (id) => unwrap(api.get(`/items/${encodeURIComponent(id)}`));
+export const createItem = (payload) => unwrap(api.post("/items", payload));
+export const updateItem = (id, payload) => unwrap(api.put(`/items/${encodeURIComponent(id)}`, payload));
+export const deleteItem = (id) => unwrap(api.delete(`/items/${encodeURIComponent(id)}`));
 
-export const deleteParty = (id) =>
-  api.delete(`/parties/${id}`).then((r) => r.data);
-
-/* ------------------ Items ------------------ */
-export const fetchItems = () =>
-  api.get("/items").then((r) => r.data);
-
-export const createItem = (payload) =>
-  api.post("/items", payload).then((r) => r.data);
-
-export const updateItem = (id, payload) =>
-  api.put(`/items/${id}`, payload).then((r) => r.data);
-
-export const deleteItem = (id) =>
-  api.delete(`/items/${id}`).then((r) => r.data);
-
-/* ------------------ Purchases ------------------ */
-export const fetchPurchases = () =>
-  api.get("/purchases").then((r) => r.data);
-
-export const fetchPurchase = (id) =>
-  api.get(`/purchases/${id}`).then((r) => r.data);
-
-export const createPurchase = (payload) =>
-  api.post("/purchases", payload).then((r) => r.data);
-
-export const updatePurchase = (id, payload) =>
-  api.put(`/purchases/${id}`, payload).then((r) => r.data);
-
-export const deletePurchase = (id) =>
-  api.delete(`/purchases/${id}`).then((r) => r.data);
+/* ---------- Purchases (optional) ---------- */
+export const fetchPurchases = (params = {}) => unwrap(api.get("/purchases", { params }));
+export const fetchPurchase = (id) => unwrap(api.get(`/purchases/${encodeURIComponent(id)}`));
+export const createPurchase = (payload) => unwrap(api.post("/purchases", payload));
+export const updatePurchase = (id, payload) => unwrap(api.put(`/purchases/${encodeURIComponent(id)}`, payload));
+export const deletePurchase = (id) => unwrap(api.delete(`/purchases/${encodeURIComponent(id)}`));
 
 export default api;

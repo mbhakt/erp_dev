@@ -4,7 +4,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 
 import AppLayout from "./components/AppLayout";
 import InvoicesPage from "./pages/InvoicesPage";
-import InvoiceForm from "./pages/InvoiceForm";
+import InvoiceForm from "./components/InvoiceForm";
 import PartiesPage from "./pages/PartiesPage";
 import ItemsPage from "./pages/ItemsPage";
 
