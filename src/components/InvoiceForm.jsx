@@ -41,8 +41,12 @@ function computeRowAmount(row) {
   return Number.isNaN(amt) ? 0 : amt;
 }
 
-/* Component */
-export default function InvoiceForm({ invoiceId = null, onSaved = null, onCancel = null }) {
+/* Component
+   Accept either:
+     - invoiceId: id of invoice to fetch (existing behavior)
+     - invoice: full invoice object (when parent already has it)
+*/
+export default function InvoiceForm({ invoiceId = null, invoice = null, onSaved = null, onCancel = null }) {
   const [parties, setParties] = useState([]);
   const [itemsMaster, setItemsMaster] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -65,60 +69,100 @@ export default function InvoiceForm({ invoiceId = null, onSaved = null, onCancel
     fetchItems().then((r) => setItemsMaster(Array.isArray(r) ? r : (r.data || []))).catch(() => setItemsMaster([]));
   }, []);
 
-  // propose next invoice no only if form.invoice_no is empty (prevents overriding when editing)
+  // propose next invoice no only if creating new (neither invoiceId nor invoice object present),
+  // and if invoice_no is empty
   useEffect(() => {
     async function loadLast() {
-      try {
-        const res = await fetchInvoices({ limit: 1, sort: "-invoice_no" }).catch(() => null);
-        let arr = [];
-        if (res) {
-          if (Array.isArray(res)) arr = res;
-          else if (Array.isArray(res.data)) arr = res.data;
-          else if (Array.isArray(res.invoices)) arr = res.invoices;
-        }
-        if (arr.length > 0) {
-          const first = arr[0];
-          const invNo = first.invoice_no ?? first.invoiceNo ?? "";
-          const n = parseInvoiceNoNumber(invNo);
-          if (!Number.isNaN(n)) {
-            setLastInvoiceNumeric(n);
-            // propose only if not editing and invoice_no empty
-            if (!invoiceId && !form.invoice_no) {
-              const m = String(invNo).match(/^(.*?)(\d+)\s*$/);
-              if (m) {
-                const prefix = m[1] || "INV-";
-                const nextNum = String(n + 1).padStart(String(n).length, "0");
-                setForm((f) => ({ ...f, invoice_no: `${prefix}${nextNum}` }));
-              } else {
-                setForm((f) => ({ ...f, invoice_no: `INV-${String(n + 1)}` }));
-              }
-            }
-          }
-        } else {
-          if (!invoiceId && !form.invoice_no) setForm((f) => ({ ...f, invoice_no: `INV-1` }));
-        }
-      } catch (err) {}
-    }
-    loadLast();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [invoiceId]);
+  // don't propose when editing (invoice object or invoiceId present)
+  if (invoiceId || invoice) return;
 
-  // load invoice details when editing
+  try {
+    const res = await fetchInvoices({ limit: 1, sort: "-invoice_no" }).catch(() => null);
+    let arr = [];
+    if (res) {
+      if (Array.isArray(res)) arr = res;
+      else if (Array.isArray(res.data)) arr = res.data;
+      else if (Array.isArray(res.invoices)) arr = res.invoices;
+    }
+
+    if (arr.length > 0) {
+      const first = arr[0];
+      const invNo = first.invoice_no ?? first.invoiceNo ?? first.number ?? "";
+      const n = parseInvoiceNoNumber(invNo);
+      if (!Number.isNaN(n)) {
+        setLastInvoiceNumeric(n);
+        // propose only if invoice_no is currently empty
+        setForm((f) => {
+          if (f.invoice_no) return f;
+          // next number padded to 3 digits (001, 002, ...)
+          const nextNumPadded = String(n + 1).padStart(3, "0");
+          return { ...f, invoice_no: nextNumPadded };
+        });
+      } else {
+        // if we cannot parse a number, default to 001 if empty
+        setForm((f) => (f.invoice_no ? f : { ...f, invoice_no: "001" }));
+      }
+    } else {
+      // no previous invoices found -> start at 001
+      setForm((f) => (f.invoice_no ? f : { ...f, invoice_no: "001" }));
+    }
+  } catch (err) {
+    // ignore errors silently
+  }
+}
+    loadLast();
+  }, [invoiceId, invoice]);
+
+  // If parent passes full invoice object, use it directly (no fetch)
+  useEffect(() => {
+    if (!invoice) return;
+    setLoading(true);
+    try {
+      setForm({
+        invoice_no: invoice.invoice_no ?? invoice.invoiceNo ?? "",
+        party_id: String(invoice.party_id ?? invoice.partyId ?? invoice.party_id ?? ""),
+        invoice_date: fmtDateForInput(invoice.invoice_date ?? invoice.invoiceDate ?? invoice.created_at ?? new Date()),
+        notes: invoice.notes ?? "",
+      });
+
+      const itemsList = invoice.items ?? invoice.invoice_items ?? invoice.rows ?? invoice.items_list ?? [];
+      if (Array.isArray(itemsList) && itemsList.length > 0) {
+        const normalized = itemsList.map((it) => ({
+          item_id: String(it.item_id ?? it.itemId ?? it.id ?? it.product_id ?? ""),
+          qty: Number(it.qty ?? it.quantity ?? 1),
+          unit_price: Number(it.unit_price ?? it.price ?? it.rate ?? 0),
+          discount: Number(it.discount ?? 0),
+        }));
+        setRows(normalized);
+      } else {
+        setRows([{ item_id: "", qty: 1, unit_price: 0, discount: 0 }]);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [invoice]);
+
+  // load invoice details when editing by id
   useEffect(() => {
     if (!invoiceId) return;
+    // if parent passed invoice object and it matches invoiceId, we already initialized above
+    if (invoice && (String(invoice.id) === String(invoiceId) || String(invoice._id) === String(invoiceId))) {
+      return;
+    }
+
     setLoading(true);
     (async () => {
       try {
         const payload = await fetchInvoice(invoiceId);
-        const invoice = payload && payload.invoice ? payload.invoice : (payload.data ? payload.data : payload);
-        if (!invoice) throw new Error("No invoice returned");
+        const inv = payload && payload.invoice ? payload.invoice : (payload.data ? payload.data : payload);
+        if (!inv) throw new Error("No invoice returned");
         setForm({
-          invoice_no: invoice.invoice_no ?? invoice.invoiceNo ?? "",
-          party_id: String(invoice.party_id ?? invoice.partyId ?? invoice.party_id ?? ""),
-          invoice_date: fmtDateForInput(invoice.invoice_date ?? invoice.invoiceDate ?? invoice.created_at ?? new Date()),
-          notes: invoice.notes ?? "",
+          invoice_no: inv.invoice_no ?? inv.invoiceNo ?? "",
+          party_id: String(inv.party_id ?? inv.partyId ?? inv.party_id ?? ""),
+          invoice_date: fmtDateForInput(inv.invoice_date ?? inv.invoiceDate ?? inv.created_at ?? new Date()),
+          notes: inv.notes ?? "",
         });
-        const itemsList = invoice.items ?? invoice.invoice_items ?? invoice.rows ?? invoice.items_list ?? [];
+        const itemsList = inv.items ?? inv.invoice_items ?? inv.rows ?? inv.items_list ?? [];
         if (Array.isArray(itemsList) && itemsList.length > 0) {
           const normalized = itemsList.map((it) => ({
             item_id: String(it.item_id ?? it.itemId ?? it.id ?? it.product_id ?? ""),
@@ -132,13 +176,14 @@ export default function InvoiceForm({ invoiceId = null, onSaved = null, onCancel
         }
       } catch (err) {
         console.error("Failed to load invoice", err);
+        setRows([{ item_id: "", qty: 1, unit_price: 0, discount: 0 }]);
       } finally {
         setLoading(false);
       }
     })();
-  }, [invoiceId]);
+  }, [invoiceId, invoice]);
 
-  // fill unit price from master
+  // fill unit price from master (for existing rows where price is 0)
   useEffect(() => {
     setRows((prev) =>
       prev.map((r) => {
@@ -182,8 +227,8 @@ export default function InvoiceForm({ invoiceId = null, onSaved = null, onCancel
       return alert("Add at least one item.");
     }
 
-    // invoice number validation on create only
-    if (!invoiceId && lastInvoiceNumeric !== null) {
+    // invoice number validation on create only (invoiceId and invoice are both falsy)
+    if (!invoiceId && !invoice && lastInvoiceNumeric !== null) {
       const numeric = parseInvoiceNoNumber(form.invoice_no);
       if (Number.isNaN(numeric)) {
         setSaving(false);
@@ -212,8 +257,10 @@ export default function InvoiceForm({ invoiceId = null, onSaved = null, onCancel
 
     try {
       let res;
-      if (invoiceId) {
-        res = await updateInvoice(invoiceId, payload);
+      if (invoiceId || (invoice && (invoice.id || invoice._id))) {
+        // prefer invoiceId if provided, otherwise use invoice.id/_id
+        const idToUpdate = invoiceId || invoice.id || invoice._id;
+        res = await updateInvoice(idToUpdate, payload);
       } else {
         res = await createInvoice(payload);
       }
@@ -247,7 +294,7 @@ export default function InvoiceForm({ invoiceId = null, onSaved = null, onCancel
 
   return (
     <div className="p-4 bg-white rounded shadow">
-      <h3 className="text-lg font-semibold mb-3">{invoiceId ? "Edit Invoice" : "New Invoice"}</h3>
+      <h3 className="text-lg font-semibold mb-3">{invoiceId || invoice ? "Edit Invoice" : "New Invoice"}</h3>
 
       {loading ? <div>Loading invoice...</div> : null}
 

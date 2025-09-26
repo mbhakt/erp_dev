@@ -5,6 +5,7 @@ import AppLayout from "../components/AppLayout";
 import InvoiceForm from "../components/InvoiceForm";
  import {
    fetchInvoices,
+   fetchItems,
    createInvoice,
    updateInvoice,
    deleteInvoice,
@@ -14,6 +15,7 @@ export default function SaleInvoicesPage() {
   const [invoices, setInvoices] = useState([]);
   const [openEditor, setOpenEditor] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [items, setItems] = useState([]);
   
   // Helper: return invoice amount from different possible fields or compute from lines
 const getInvoiceAmount = (inv) => {
@@ -71,6 +73,14 @@ const fmt = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 2,
 });
 
+async function loadItems() {
+  try {
+    const data = await fetchItems();
+    setItems(Array.isArray(data) ? data : []);
+  } catch (err) {
+    console.error("Failed to load items:", err);
+  }
+}
 
   async function loadInvoices() {
   try {
@@ -103,6 +113,7 @@ const fmt = new Intl.NumberFormat("en-IN", {
 
   useEffect(() => {
     loadInvoices();
+    loadItems();
   }, []);
 
   function handleAdd() {
@@ -206,6 +217,7 @@ const totalSales = invoices.reduce((s, i) => s + Number(i.amount || 0), 0);
           <InvoiceForm
             open={true}
             invoice={editing}
+            items={items}
             onClose={() => {
               setOpenEditor(false);
               setEditing(null);

@@ -1,0 +1,335 @@
+diff --git a/src/api/erp_additions.js b/src/api/erp_additions.js
+new file mode 100644
+index 0000000..0000000
+--- /dev/null
++++ b/src/api/erp_additions.js
+@@ -0,0 +1,200 @@
++// Convenience API helper exports for Items, Parties, Purchases
++// You can either import these directly where needed:
++// import { fetchItems, createItem } from '../api/erp_additions';
++// or copy/paste into your existing src/api/index.js
++
++import api from './index-axios-compat';
++// NOTE: If your src/api/index.js exports an axios instance named `api`,
++// you can change the import above to: import { api } from './index';
++// or simply copy the functions below into your existing index.js.
++
++/* ------------------ Items ------------------ */
++export const fetchItems = () => api.get("/items").then((r) => r.data);
++export const fetchItem = (id) => api.get(`/items/${id}`).then((r) => r.data);
++export const createItem = (payload) => api.post("/items", payload).then((r) => r.data);
++export const updateItem = (id, payload) => api.put(`/items/${id}`, payload).then((r) => r.data);
++
++/* ------------------ Parties ------------------ */
++export const fetchParties = () => api.get("/parties").then((r) => r.data);
++export const fetchParty = (id) => api.get(`/parties/${id}`).then((r) => r.data);
++export const createParty = (payload) => api.post("/parties", payload).then((r) => r.data);
++export const updateParty = (id, payload) => api.put(`/parties/${id}`, payload).then((r) => r.data);
++
++/* ------------------ Purchases ------------------ */
++export const fetchPurchases = () => api.get("/purchases").then((r) => r.data);
++export const fetchPurchase = (id) => api.get(`/purchases/${id}`).then((r) => r.data);
++export const createPurchase = (payload) => api.post("/purchases", payload).then((r) => r.data);
++export const updatePurchase = (id, payload) => api.put(`/purchases/${id}`, payload).then((r) => r.data);
++
++/* ------------------ Notes about `api` import ------------------ */
++/*
++ If your project exposes the axios instance as default export from src/api/index.js
++ (for example `export default api;`), rename the import at top:
++    import api from './index';
++
++ If instead src/api/index.js exports `api` named export:
++    import { api } from './index';
++
++ Or simply copy the 12 function definitions into src/api/index.js at the end.
++*/
++
+diff --git a/src/pages/ItemsPage.jsx b/src/pages/ItemsPage.jsx
+new file mode 100644
+index 0000000..0000000
+--- /dev/null
++++ b/src/pages/ItemsPage.jsx
+@@ -0,0 +1,160 @@
++import React, { useEffect, useState } from "react";
++// Import either from the new additions file or from your main api index
++// Example if you copied functions into src/api/index.js:
++// import { fetchItems, createItem, updateItem } from "../api";
++// If you used the additions file:
++import { fetchItems, createItem, updateItem } from "../api/erp_additions";
++import ItemModal from "../components/ItemModal";
++
++export default function ItemsPage() {
++  const [items, setItems] = useState([]);
++  const [loading, setLoading] = useState(false);
++  const [modalOpen, setModalOpen] = useState(false);
++  const [editingItem, setEditingItem] = useState(null);
++  const [saving, setSaving] = useState(false);
++
++  const fetchList = async () => {
++    setLoading(true);
++    try {
++      const data = await fetchItems();
++      setItems(data);
++    } catch (err) {
++      console.error("fetchItems error", err);
++    } finally {
++      setLoading(false);
++    }
++  };
++
++  useEffect(() => {
++    fetchList();
++  }, []);
++
++  const onSave = async (formData) => {
++    setSaving(true);
++    try {
++      if (editingItem?.id) {
++        await updateItem(editingItem.id, formData);
++      } else {
++        await createItem(formData);
++      }
++      await fetchList();
++      setModalOpen(false);
++      setEditingItem(null);
++    } catch (e) {
++      console.error("Item save failed", e);
++      alert("Save failed: " + (e?.message || "Unknown error"));
++    } finally {
++      setSaving(false);
++    }
++  };
++
++  return (
++    <div className="p-4">
++      <div className="flex items-center justify-between mb-4">
++        <h2 className="text-lg font-semibold">Items</h2>
++        <button
++          className="px-3 py-1 rounded bg-blue-600 text-white"
++          onClick={() => { setEditingItem(null); setModalOpen(true); }}
++        >
++          Add Item
++        </button>
++      </div>
++
++      <ItemModal
++        open={modalOpen}
++        onClose={() => !saving && setModalOpen(false)}
++        item={editingItem}
++        onSave={onSave}
++        saving={saving}
++      />
++
++      {loading ? (
++        <p>Loading…</p>
++      ) : (
++        <table className="min-w-full bg-white">
++          <thead>
++            <tr>
++              <th className="text-left px-4 py-2">Name</th>
++              <th className="text-left px-4 py-2">Rate</th>
++            </tr>
++          </thead>
++          <tbody>
++            {items.map((it) => (
++              <tr key={it.id} className="hover:bg-gray-50">
++                <td className="px-4 py-2">{it.name}</td>
++                <td className="px-4 py-2">{Number(it.rate).toFixed(2)}</td>
++              </tr>
++            ))}
++          </tbody>
++        </table>
++      )}
++    </div>
++  );
++}
++
+diff --git a/src/pages/PartiesPage.jsx b/src/pages/PartiesPage.jsx
+new file mode 100644
+index 0000000..0000000
+--- /dev/null
++++ b/src/pages/PartiesPage.jsx
+@@ -0,0 +1,172 @@
++import React, { useEffect, useState } from "react";
++import { fetchParties, createParty, updateParty } from "../api/erp_additions";
++import PartyModal from "../components/PartyModal";
++
++export default function PartiesPage() {
++  const [parties, setParties] = useState([]);
++  const [loading, setLoading] = useState(false);
++  const [modalOpen, setModalOpen] = useState(false);
++  const [editingParty, setEditingParty] = useState(null);
++  const [saving, setSaving] = useState(false);
++
++  const fetchList = async () => {
++    setLoading(true);
++    try {
++      const data = await fetchParties();
++      setParties(data);
++    } catch (err) {
++      console.error("fetchParties error", err);
++    } finally {
++      setLoading(false);
++    }
++  };
++
++  useEffect(() => {
++    fetchList();
++  }, []);
++
++  const onSave = async (formData) => {
++    setSaving(true);
++    try {
++      if (editingParty?.id) {
++        await updateParty(editingParty.id, formData);
++      } else {
++        await createParty(formData);
++      }
++      await fetchList();
++      setModalOpen(false);
++      setEditingParty(null);
++    } catch (e) {
++      console.error("Party save failed", e);
++      alert("Save failed: " + (e?.message || "Unknown error"));
++    } finally {
++      setSaving(false);
++    }
++  };
++
++  return (
++    <div className="p-4">
++      <div className="flex items-center justify-between mb-4">
++        <h2 className="text-lg font-semibold">Parties</h2>
++        <button
++          className="px-3 py-1 rounded bg-green-600 text-white"
++          onClick={() => { setEditingParty(null); setModalOpen(true); }}
++        >
++          Add Party
++        </button>
++      </div>
++
++      <PartyModal
++        open={modalOpen}
++        onClose={() => !saving && setModalOpen(false)}
++        party={editingParty}
++        onSave={onSave}
++        saving={saving}
++      />
++
++      {loading ? (
++        <p>Loading…</p>
++      ) : (
++        <ul className="space-y-2">
++          {parties.map((p) => (
++            <li key={p.id} className="p-2 border rounded">
++              <div className="font-medium">{p.name}</div>
++              <div className="text-sm text-gray-600">{p.city || ""} {p.phone ? `• ${p.phone}` : ""}</div>
++            </li>
++          ))}
++        </ul>
++      )}
++    </div>
++  );
++}
++
+diff --git a/src/pages/PurchasesPage.jsx b/src/pages/PurchasesPage.jsx
+new file mode 100644
+index 0000000..0000000
+--- /dev/null
++++ b/src/pages/PurchasesPage.jsx
+@@ -0,0 +1,231 @@
++import React, { useEffect, useState } from "react";
++import { fetchPurchases, createPurchase, updatePurchase } from "../api/erp_additions";
++import PurchaseModal from "../components/PurchaseModal";
++
++export default function PurchasesPage() {
++  const [purchases, setPurchases] = useState([]);
++  const [loading, setLoading] = useState(false);
++  const [modalOpen, setModalOpen] = useState(false);
++  const [editingPurchase, setEditingPurchase] = useState(null);
++  const [saving, setSaving] = useState(false);
++
++  const fetchList = async () => {
++    setLoading(true);
++    try {
++      const data = await fetchPurchases();
++      setPurchases(data);
++    } catch (err) {
++      console.error("fetchPurchases error", err);
++    } finally {
++      setLoading(false);
++    }
++  };
++
++  useEffect(() => {
++    fetchList();
++  }, []);
++
++  const onSave = async (formData) => {
++    setSaving(true);
++    try {
++      if (editingPurchase?.id) {
++        await updatePurchase(editingPurchase.id, formData);
++      } else {
++        await createPurchase(formData);
++      }
++      await fetchList();
++      setModalOpen(false);
++      setEditingPurchase(null);
++    } catch (e) {
++      console.error("Purchase save failed", e);
++      alert("Save failed: " + (e?.message || "Unknown error"));
++    } finally {
++      setSaving(false);
++    }
++  };
++
++  return (
++    <div className="p-4">
++      <div className="flex items-center justify-between mb-4">
++        <h2 className="text-lg font-semibold">Purchases</h2>
++        <button
++          className="px-3 py-1 rounded bg-indigo-600 text-white"
++          onClick={() => { setEditingPurchase(null); setModalOpen(true); }}
++        >
++          Add Purchase
++        </button>
++      </div>
++
++      <PurchaseModal
++        open={modalOpen}
++        onClose={() => !saving && setModalOpen(false)}
++        purchase={editingPurchase}
++        onSave={onSave}
++        saving={saving}
++      />
++
++      {loading ? (
++        <p>Loading…</p>
++      ) : (
++        <table className="min-w-full bg-white">
++          <thead>
++            <tr>
++              <th className="text-left px-4 py-2">Date</th>
++              <th className="text-left px-4 py-2">Party</th>
++              <th className="text-right px-4 py-2">Subtotal</th>
++              <th className="text-right px-4 py-2">Tax</th>
++              <th className="text-right px-4 py-2">Total</th>
++            </tr>
++          </thead>
++          <tbody>
++            {purchases.map((p) => (
++              <tr key={p.id} className="hover:bg-gray-50">
++                <td className="px-4 py-2">{p.date ? new Date(p.date).toLocaleDateString() : ""}</td>
++                <td className="px-4 py-2">{p.party_name || (p.party && p.party.name) || ""}</td>
++                <td className="px-4 py-2 text-right">{Number(p.sub_total || 0).toFixed(2)}</td>
++                <td className="px-4 py-2 text-right">{Number(p.tax_total || 0).toFixed(2)}</td>
++                <td className="px-4 py-2 text-right">{Number(p.grand_total || 0).toFixed(2)}</td>
++              </tr>
++            ))}
++          </tbody>
++        </table>
++      )}
++    </div>
++  );
++}

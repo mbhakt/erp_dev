@@ -1,0 +1,247 @@
+diff --git a/src/api/index.js b/src/api/index.js
+index 1234567..89abcde 100644
+--- a/src/api/index.js
++++ b/src/api/index.js
+@@
+ export const fetchInvoices = () => api.get("/invoices").then((r) => r.data);
+ export const fetchInvoice = (id) => api.get(`/invoices/${id}`).then((r) => r.data);
+ 
++/* ------------------ Items ------------------ */
++export const fetchItems = () => api.get("/items").then((r) => r.data);
++export const fetchItem = (id) => api.get(`/items/${id}`).then((r) => r.data);
++export const createItem = (payload) => api.post("/items", payload).then((r) => r.data);
++export const updateItem = (id, payload) => api.put(`/items/${id}`, payload).then((r) => r.data);
++
++/* ------------------ Parties ------------------ */
++export const fetchParties = () => api.get("/parties").then((r) => r.data);
++export const fetchParty = (id) => api.get(`/parties/${id}`).then((r) => r.data);
++export const createParty = (payload) => api.post("/parties", payload).then((r) => r.data);
++export const updateParty = (id, payload) => api.put(`/parties/${id}`, payload).then((r) => r.data);
++
++/* ------------------ Purchases ------------------ */
++export const fetchPurchases = () => api.get("/purchases").then((r) => r.data);
++export const fetchPurchase = (id) => api.get(`/purchases/${id}`).then((r) => r.data);
++export const createPurchase = (payload) => api.post("/purchases", payload).then((r) => r.data);
++export const updatePurchase = (id, payload) => api.put(`/purchases/${id}`, payload).then((r) => r.data);
++
+diff --git a/src/pages/ItemsPage.jsx b/src/pages/ItemsPage.jsx
+new file mode 100644
+--- /dev/null
++++ b/src/pages/ItemsPage.jsx
+@@
++import React, { useEffect, useState } from "react";
++import { fetchItems, createItem, updateItem } from "../api";
++import ItemModal from "../components/ItemModal";
++
++export default function ItemsPage() {
++  const [items, setItems] = useState([]);
++  const [loading, setLoading] = useState(false);
++  const [modalOpen, setModalOpen] = useState(false);
++  const [editingItem, setEditingItem] = useState(null);
++  const [saving, setSaving] = useState(false);
++
++  const fetchList = async () => {
++    setLoading(true);
++    try {
++      const data = await fetchItems();
++      setItems(data);
++    } finally {
++      setLoading(false);
++    }
++  };
++
++  useEffect(() => { fetchList(); }, []);
++
++  const onSave = async (formData) => {
++    setSaving(true);
++    try {
++      if (editingItem?.id) {
++        await updateItem(editingItem.id, formData);
++      } else {
++        await createItem(formData);
++      }
++      await fetchList();
++      setModalOpen(false);
++      setEditingItem(null);
++    } catch (e) {
++      alert("Save failed");
++    } finally {
++      setSaving(false);
++    }
++  };
++
++  return (
++    <div>
++      <button onClick={() => { setEditingItem(null); setModalOpen(true); }}>
++        Add Item
++      </button>
++      <ItemModal
++        open={modalOpen}
++        onClose={() => !saving && setModalOpen(false)}
++        item={editingItem}
++        onSave={onSave}
++        saving={saving}
++      />
++      {loading ? <p>Loading…</p> : (
++        <table>
++          <thead><tr><th>Name</th><th>Rate</th></tr></thead>
++          <tbody>
++            {items.map(it => (
++              <tr key={it.id}>
++                <td>{it.name}</td>
++                <td>{it.rate}</td>
++              </tr>
++            ))}
++          </tbody>
++        </table>
++      )}
++    </div>
++  );
++}
+diff --git a/src/pages/PartiesPage.jsx b/src/pages/PartiesPage.jsx
+new file mode 100644
+--- /dev/null
++++ b/src/pages/PartiesPage.jsx
+@@
++import React, { useEffect, useState } from "react";
++import { fetchParties, createParty, updateParty } from "../api";
++import PartyModal from "../components/PartyModal";
++
++export default function PartiesPage() {
++  const [parties, setParties] = useState([]);
++  const [loading, setLoading] = useState(false);
++  const [modalOpen, setModalOpen] = useState(false);
++  const [editingParty, setEditingParty] = useState(null);
++  const [saving, setSaving] = useState(false);
++
++  const fetchList = async () => {
++    setLoading(true);
++    try {
++      const data = await fetchParties();
++      setParties(data);
++    } finally {
++      setLoading(false);
++    }
++  };
++
++  useEffect(() => { fetchList(); }, []);
++
++  const onSave = async (formData) => {
++    setSaving(true);
++    try {
++      if (editingParty?.id) {
++        await updateParty(editingParty.id, formData);
++      } else {
++        await createParty(formData);
++      }
++      await fetchList();
++      setModalOpen(false);
++      setEditingParty(null);
++    } catch {
++      alert("Save failed");
++    } finally {
++      setSaving(false);
++    }
++  };
++
++  return (
++    <div>
++      <button onClick={() => { setEditingParty(null); setModalOpen(true); }}>
++        Add Party
++      </button>
++      <PartyModal
++        open={modalOpen}
++        onClose={() => !saving && setModalOpen(false)}
++        party={editingParty}
++        onSave={onSave}
++        saving={saving}
++      />
++      {loading ? <p>Loading…</p> : (
++        <ul>
++          {parties.map(p => <li key={p.id}>{p.name}</li>)}
++        </ul>
++      )}
++    </div>
++  );
++}
+diff --git a/src/pages/PurchasesPage.jsx b/src/pages/PurchasesPage.jsx
+new file mode 100644
+--- /dev/null
++++ b/src/pages/PurchasesPage.jsx
+@@
++import React, { useEffect, useState } from "react";
++import { fetchPurchases, createPurchase, updatePurchase } from "../api";
++import PurchaseModal from "../components/PurchaseModal";
++
++export default function PurchasesPage() {
++  const [purchases, setPurchases] = useState([]);
++  const [loading, setLoading] = useState(false);
++  const [modalOpen, setModalOpen] = useState(false);
++  const [editingPurchase, setEditingPurchase] = useState(null);
++  const [saving, setSaving] = useState(false);
++
++  const fetchList = async () => {
++    setLoading(true);
++    try {
++      const data = await fetchPurchases();
++      setPurchases(data);
++    } finally {
++      setLoading(false);
++    }
++  };
++
++  useEffect(() => { fetchList(); }, []);
++
++  const onSave = async (formData) => {
++    setSaving(true);
++    try {
++      if (editingPurchase?.id) {
++        await updatePurchase(editingPurchase.id, formData);
++      } else {
++        await createPurchase(formData);
++      }
++      await fetchList();
++      setModalOpen(false);
++      setEditingPurchase(null);
++    } catch {
++      alert("Save failed");
++    } finally {
++      setSaving(false);
++    }
++  };
++
++  return (
++    <div>
++      <button onClick={() => { setEditingPurchase(null); setModalOpen(true); }}>
++        Add Purchase
++      </button>
++      <PurchaseModal
++        open={modalOpen}
++        onClose={() => !saving && setModalOpen(false)}
++        purchase={editingPurchase}
++        onSave={onSave}
++        saving={saving}
++      />
++      {loading ? <p>Loading…</p> : (
++        <table>
++          <thead>
++            <tr>
++              <th>Date</th><th>Party</th><th>Subtotal</th><th>Tax</th><th>Total</th>
++            </tr>
++          </thead>
++          <tbody>
++            {purchases.map(p => (
++              <tr key={p.id}>
++                <td>{new Date(p.date).toLocaleDateString()}</td>
++                <td>{p.party_name}</td>
++                <td>{p.sub_total?.toFixed(2)}</td>
++                <td>{p.tax_total?.toFixed(2)}</td>
++                <td>{p.grand_total?.toFixed(2)}</td>
++              </tr>
++            ))}
++          </tbody>
++        </table>
++      )}
++    </div>
++  );
++}

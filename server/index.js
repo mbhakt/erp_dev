@@ -19,6 +19,8 @@ app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use("/api/parties", partiesRouter);
 app.use('/api/purchases', purchasesRouter);
+app.use("/api/items", require("./routes/items"));
+
 
 // Create pool
 const pool = mysql.createPool({
