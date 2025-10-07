@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
+import { Layout, Menu } from "antd";
 import {
   Home,
   Users,
@@ -16,6 +17,17 @@ import {
   ChevronRight,
   BarChart2,
 } from "lucide-react";
+import {
+  HomeOutlined,
+  TeamOutlined,
+  AppstoreOutlined,
+  ShoppingCartOutlined,
+  DatabaseOutlined,
+  CloudUploadOutlined,
+  SettingOutlined,
+  SaveOutlined,
+  ToolOutlined,
+} from "@ant-design/icons";
 
 import Collapsible, { PRESETS } from "./Collapsible";
 import { useModal } from "../contexts/ModalContext";
@@ -34,7 +46,7 @@ const MENU = [
       { key: "parties.network", label: "Vyavahar Network", to: "/parties/network" },
     ],
   },
-  { key: "items", label: "Items", icon: Box, to: "/items", plus: true },
+  { key: "items", label: "Items", icon: Box, to: "/items", plus: false },
   {
     key: "sale",
     label: "Sale",
@@ -93,6 +105,8 @@ const MENU = [
       { key: "util.importParties", label: "Import Parties", to: "/utils/import/parties" },
       { key: "util.exportTally", label: "Exports to Tally", to: "/utils/export/tally" },
       { key: "util.exportItems", label: "Export Items", to: "/utils/export/items" },
+      { key: "util.recalculate", label: "Recalculate Balances", to: "/utilities/recalculate" },
+      { key: "util.cleanup", label: "Data Cleanup", to: "/utilities/cleanup" },
     ],
   },
   {
@@ -109,6 +123,8 @@ const MENU = [
       { key: "settings.item", label: "Item", to: "/settings/item" },
       { key: "settings.service", label: "Service Reminders", to: "/settings/service-reminders" },
       { key: "settings.accounting", label: "Accounting", to: "/settings/accounting" },
+      { key: "settings.company", label: "Company", to: "/settings/company" },
+      { key: "settings.users", label: "Users", to: "/settings/users" },
     ],
   },
 ];

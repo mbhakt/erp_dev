@@ -1,128 +1,129 @@
 // server/routes/items.js
 const express = require("express");
 const router = express.Router();
-const { ensurePool } = require("../db");
 
-// helper
-function toNumOrNull(v) {
-  if (v === null || v === undefined || v === "") return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
+// dbQuery should be a small helper that returns Promise resolving rows
+// (your project already had a lib/dbQuery, so require that)
+const dbQuery = require("../lib/dbQuery");
 
-/* GET /api/items */
+/*
+  This router expects to be mounted as:
+    app.use('/api/items', require('./routes/items'));
+  so that full endpoints are:
+    GET    /api/items
+    GET    /api/items/:id
+    POST   /api/items
+    PUT    /api/items/:id
+    DELETE /api/items/:id
+*/
+
+console.log("[routes/items] loaded");
+
 router.get("/", async (req, res) => {
   try {
-    const pool = ensurePool(req, res);
-    const [rows] = await pool.query("SELECT * FROM items ORDER BY id DESC");
-    res.json(rows);
+    const sql = `SELECT id, sku, name, description, unit, sale_price, purchase_price, qty_in_stock, created_at, updated_at
+                 FROM items
+                 ORDER BY name ASC`;
+    const rows = await dbQuery(sql);
+    return res.json(Array.isArray(rows) ? rows : []);
   } catch (err) {
-    console.error("GET /api/items error:", err);
-    res.status(500).json({ error: "Server error" });
+    console.error("[GET /api/items] error:", err);
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
-/* GET /api/items/:id */
 router.get("/:id", async (req, res) => {
+  const id = req.params.id;
   try {
-    const pool = ensurePool(req, res);
-    const [rows] = await pool.query("SELECT * FROM items WHERE id = ?", [req.params.id]);
-    res.json(rows[0] || {});
+    const sql = `SELECT id, sku, name, description, unit, sale_price, purchase_price, qty_in_stock, created_at, updated_at
+                 FROM items WHERE id = ? LIMIT 1`;
+    const rows = await dbQuery(sql, [id]);
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: "Item not found" });
+    }
+    return res.json(rows[0]);
   } catch (err) {
-    console.error("GET /api/items/:id error:", err);
-    res.status(500).json({ error: "Server error" });
+    console.error("[GET /api/items/:id] error:", err);
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
-/* POST /api/items */
 router.post("/", async (req, res) => {
   try {
-    const pool = ensurePool(req, res);
     const {
-      name,
-      sale_price,
-      purchase_price,
-      unit,
-      sku,
-      description,    // frontend may send description OR notes
-      notes,          // accept notes if frontend still sends it
-      qty_in_stock,
+      sku = null,
+      name = null,
+      description = null,
+      unit = null,
+      sale_price = 0,
+      purchase_price = 0,
+      qty_in_stock = 0,
     } = req.body || {};
 
-    if (!name || String(name).trim() === "") {
-      return res.status(400).json({ error: "Item name is required" });
-    }
+    const sql = `INSERT INTO items (sku, name, description, unit, sale_price, purchase_price, qty_in_stock)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)`;
+    const result = await dbQuery(sql, [sku, name, description, unit, sale_price, purchase_price, qty_in_stock]);
 
-    // choose description field: prefer 'description' if provided; else use 'notes'
-    const desc = description ?? notes ?? null;
-
-    const sp = toNumOrNull(sale_price) ?? 0;
-    const pp = toNumOrNull(purchase_price) ?? 0;
-    const qty = toNumOrNull(qty_in_stock) ?? 0;
-
-    const [result] = await pool.query(
-      `INSERT INTO items (name, sale_price, purchase_price, unit, sku, description, qty_in_stock, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
-      [String(name).trim(), sp, pp, unit || null, sku || null, desc, qty]
-    );
-
-    const [rows] = await pool.query("SELECT * FROM items WHERE id = ?", [result.insertId]);
-    res.json(rows[0] || {});
-  } catch (err) {
-    console.error("POST /api/items error:", err);
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-/* PUT /api/items/:id */
-router.put("/:id", async (req, res) => {
-  try {
-    const pool = ensurePool(req, res);
-    const {
-      name,
-      sale_price,
-      purchase_price,
-      unit,
+    // Return newly created item summary
+    return res.status(201).json({
+      id: result.insertId,
       sku,
+      name,
       description,
-      notes,
+      unit,
+      sale_price,
+      purchase_price,
       qty_in_stock,
-    } = req.body || {};
-
-    if (!name || String(name).trim() === "") {
-      return res.status(400).json({ error: "Item name is required" });
-    }
-
-    const desc = description ?? notes ?? null;
-
-    const sp = toNumOrNull(sale_price) ?? 0;
-    const pp = toNumOrNull(purchase_price) ?? 0;
-    const qty = toNumOrNull(qty_in_stock) ?? 0;
-
-    await pool.query(
-      `UPDATE items
-       SET name = ?, sale_price = ?, purchase_price = ?, unit = ?, sku = ?, description = ?, qty_in_stock = ?, updated_at = NOW()
-       WHERE id = ?`,
-      [String(name).trim(), sp, pp, unit || null, sku || null, desc, qty, req.params.id]
-    );
-
-    const [rows] = await pool.query("SELECT * FROM items WHERE id = ?", [req.params.id]);
-    res.json(rows[0] || {});
+    });
   } catch (err) {
-    console.error("PUT /api/items/:id error:", err);
-    res.status(500).json({ error: "Server error" });
+    console.error("[POST /api/items] error:", err);
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
-/* DELETE /api/items/:id */
-router.delete("/:id", async (req, res) => {
+router.put("/:id", async (req, res) => {
+  const id = req.params.id;
   try {
-    const pool = ensurePool(req, res);
-    await pool.query("DELETE FROM items WHERE id = ?", [req.params.id]);
-    res.json({ success: true });
+    const {
+      sku = null,
+      name = null,
+      description = null,
+      unit = null,
+      sale_price = 0,
+      purchase_price = 0,
+      qty_in_stock = 0,
+    } = req.body || {};
+
+    const sql = `UPDATE items
+                 SET sku=?, name=?, description=?, unit=?, sale_price=?, purchase_price=?, qty_in_stock=?, updated_at = NOW()
+                 WHERE id = ?`;
+    const result = await dbQuery(sql, [sku, name, description, unit, sale_price, purchase_price, qty_in_stock, id]);
+
+    // optionally check affectedRows (some dbQuery helpers return different shapes)
+    return res.json({
+      id,
+      sku,
+      name,
+      description,
+      unit,
+      sale_price,
+      purchase_price,
+      qty_in_stock,
+    });
   } catch (err) {
-    console.error("DELETE /api/items/:id error:", err);
-    res.status(500).json({ error: "Server error" });
+    console.error("[PUT /api/items/:id] error:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+router.delete("/:id", async (req, res) => {
+  const id = req.params.id;
+  try {
+    await dbQuery("DELETE FROM items WHERE id = ?", [id]);
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("[DELETE /api/items/:id] error:", err);
+    return res.status(500).json({ error: "Server error" });
   }
 });
 

@@ -1,3 +1,4 @@
+// src/components/ItemModal.jsx
 import React, { useEffect, useState } from "react";
 
 /**
@@ -15,10 +16,11 @@ export default function ItemModal({ open, onClose, item, onSave, saving }) {
   useEffect(() => {
     if (open) {
       setForm({
-        name: item?.name || "",
-        code: item?.code || "",
-        rate: item?.rate ?? "",
-        unit: item?.unit || "",
+        name: item?.name ?? "",
+        code: item?.code ?? item?.sku ?? item?.item_code ?? "",
+        rate: item?.rate ?? item?.sale_price ?? "",
+        unit: item?.unit ?? "",
+        qty_in_stock: item?.qty_in_stock ?? "",
       });
       setErrors({});
     }
@@ -38,12 +40,12 @@ export default function ItemModal({ open, onClose, item, onSave, saving }) {
     const e = validate();
     setErrors(e);
     if (Object.keys(e).length) return;
-    // prepare payload
     const payload = {
       name: form.name.trim(),
       code: form.code.trim() || undefined,
       rate: Number(form.rate),
       unit: form.unit.trim() || undefined,
+      qty_in_stock: Number(form.qty_in_stock || 0),
     };
     await onSave(payload);
   };
@@ -53,11 +55,7 @@ export default function ItemModal({ open, onClose, item, onSave, saving }) {
       <form onSubmit={handleSubmit} className="w-full max-w-lg bg-white rounded shadow-lg p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">{item ? "Edit Item" : "Add Item"}</h3>
-          <button
-            type="button"
-            onClick={() => !saving && onClose()}
-            className="text-gray-500 hover:text-gray-700"
-          >
+          <button type="button" onClick={() => !saving && onClose()} className="text-gray-500 hover:text-gray-700">
             ✕
           </button>
         </div>

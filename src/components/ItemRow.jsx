@@ -10,6 +10,7 @@ export default function ItemRow({ item, onChangeQty }) {
       </div>
       <div className="w-28 text-right">₹ {Number(item.price).toFixed(2)}</div>
       <div className="w-28 text-right">₹ {(item.qty * item.price).toFixed(2)}</div>
+      <div className="text-xs text-gray-500">Unit: {item.unit || "-"}, Stock: {item.qty_in_stock ?? 0}</div>
     </div>
   );
 }

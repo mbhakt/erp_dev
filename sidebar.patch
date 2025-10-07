@@ -1,0 +1,18 @@
+
+*** Begin Patch
+*** Update File: src/components/Sidebar.jsx
+@@
+       <Menu.SubMenu key="/sale" icon={<ShoppingOutlined/>} title="Sale">
+         <Menu.Item key="/sale/invoices"><Link to="/sale/invoices">Sale Invoices</Link></Menu.Item>
+       </Menu.SubMenu>
++      <Menu.SubMenu key="/purchase" title="Purchase & Expense">
++        <Menu.Item key="/purchase/bills"><Link to="/purchase/bills">Purchase Bills</Link></Menu.Item>
++        <Menu.Item key="/purchase/expenses"><Link to="/purchase/expenses">Expenses</Link></Menu.Item>
++      </Menu.SubMenu>
++      <Menu.SubMenu key="/cash" title="Cash & Bank">
++        <Menu.Item key="/cash/banks"><Link to="/cash/banks">Bank Accounts</Link></Menu.Item>
++        <Menu.Item key="/cash/cashin"><Link to="/cash/cashin">Cash in Hand</Link></Menu.Item>
++      </Menu.SubMenu>
+@@
+       <Menu.Item key="/reports" icon={<PieChartOutlined/>}><Link to="/reports">Reports</Link></Menu.Item>
+*** End Patch

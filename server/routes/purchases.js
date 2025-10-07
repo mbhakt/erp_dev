@@ -1,14 +1,17 @@
 // server/routes/purchases.js
+// Purchases routes with real transactions using pool.getConnection()
+
 const express = require("express");
 const router = express.Router();
-const { createPool } = require("../db");
+const db = require("../db"); // this should be your mysql2/promise pool
 
-const pool = createPool();
-
-// GET all purchases (simple)
+/**
+ * GET /api/purchases
+ * List purchases with party name
+ */
 router.get("/", async (req, res) => {
   try {
-    const [rows] = await pool.query(
+    const [rows] = await db.query(
       `SELECT p.id, p.date, p.party_id, p.notes, p.sub_total, p.tax_total, p.grand_total, p.created_at,
               pt.name AS party_name
        FROM purchases p
@@ -22,15 +25,18 @@ router.get("/", async (req, res) => {
   }
 });
 
-// POST create purchase with lines (transactional)
+/**
+ * POST /api/purchases
+ * Create purchase with lines inside a transaction
+ */
 router.post("/", async (req, res) => {
-  const conn = await pool.getConnection();
+  const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
 
     const { party_id, date, notes = "", lines = [] } = req.body || {};
 
-    // compute totals
+    // --- calculate totals ---
     let sub_total = 0;
     let tax_total = 0;
     for (const l of lines) {
@@ -40,7 +46,6 @@ router.post("/", async (req, res) => {
       const tax = (lineTotal * (Number(l.taxPercent) || 0)) / 100;
       sub_total += lineTotal;
       tax_total += tax;
-      // store computed values back to line for later insert
       l._line_total = Number(lineTotal.toFixed(2));
       l._tax = Number(tax.toFixed(2));
     }
@@ -48,7 +53,7 @@ router.post("/", async (req, res) => {
     sub_total = Number(sub_total.toFixed(2));
     tax_total = Number(tax_total.toFixed(2));
 
-    // insert purchases row
+    // --- insert purchase header ---
     const [result] = await conn.query(
       `INSERT INTO purchases (party_id, date, notes, sub_total, tax_total, grand_total)
        VALUES (?, ?, ?, ?, ?, ?)`,
@@ -57,10 +62,8 @@ router.post("/", async (req, res) => {
 
     const purchaseId = result.insertId;
 
-    // insert each purchase line
+    // --- insert purchase lines ---
     if (Array.isArray(lines) && lines.length) {
-      const lineInsertSql =
-        "INSERT INTO purchase_lines (purchase_id, item_id, qty, rate, tax_percent, line_total) VALUES ?";
       const values = lines.map((l) => [
         purchaseId,
         l.item_id || null,
@@ -69,17 +72,19 @@ router.post("/", async (req, res) => {
         Number(l.taxPercent) || 0,
         Number(l._line_total || 0),
       ]);
+      const lineInsertSql =
+        "INSERT INTO purchase_lines (purchase_id, item_id, qty, rate, tax_percent, line_total) VALUES ?";
       await conn.query(lineInsertSql, [values]);
     }
 
     await conn.commit();
 
-    // Optionally return the created purchase with lines
-    const [[purchaseRow]] = await conn.query("SELECT * FROM purchases WHERE id = ?", [purchaseId]);
+    // --- fetch and return created purchase + lines ---
+    const [purchaseRow] = await conn.query("SELECT * FROM purchases WHERE id = ?", [purchaseId]);
     const [insertedLines] = await conn.query("SELECT * FROM purchase_lines WHERE purchase_id = ?", [purchaseId]);
 
     conn.release();
-    res.status(201).json({ id: purchaseId, purchase: purchaseRow, lines: insertedLines });
+    res.status(201).json({ id: purchaseId, purchase: purchaseRow[0], lines: insertedLines });
   } catch (err) {
     await conn.rollback().catch(() => {});
     conn.release();

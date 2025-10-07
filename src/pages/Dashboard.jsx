@@ -1,31 +1,27 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { Row, Col, Card } from 'antd';
+import { getDashboard } from '../api/mockApi';
+import { currencyINR } from '../utils/format';
+import { LineChart, Line, ResponsiveContainer } from 'recharts';
+import { getReports } from '../api/mockApi';
 
-export default function Dashboard() {
+export default function Dashboard(){
+  const [summary, setSummary] = useState({});
+  const [chartData, setChartData] = useState([]);
+  useEffect(()=>{ getDashboard().then(setSummary); getReports().then(r=>setChartData(r.sales||[])); },[]);
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white p-4 rounded shadow-sm">
-          <div className="text-sm text-gray-500">Invoices</div>
-          <div className="text-2xl font-semibold mt-2">124</div>
+    <div>
+      <h2>Dashboard</h2>
+      <Row gutter={16}>
+        <Col span={8}><Card><h4>Total Receivable</h4><div style={{fontSize:22}}>{currencyINR(summary.totalReceivable)}</div></Card></Col>
+        <Col span={8}><Card><h4>Total Payable</h4><div style={{fontSize:22}}>{currencyINR(summary.totalPayable)}</div></Card></Col>
+        <Col span={8}><Card><h4>Total Sale</h4><div style={{fontSize:22}}>{currencyINR(summary.totalSale)}</div></Card></Col>
+      </Row>
+      <Card style={{ marginTop:20 }} title="Total Sale">
+        <div style={{ height:220 }}>
+          <ResponsiveContainer width="100%" height="100%"><LineChart data={chartData}><Line type="monotone" dataKey="value" stroke="#2a9df4" strokeWidth={3} dot={{r:4}}/></LineChart></ResponsiveContainer>
         </div>
-        <div className="bg-white p-4 rounded shadow-sm">
-          <div className="text-sm text-gray-500">Receivables</div>
-          <div className="text-2xl font-semibold mt-2">₹ 1,24,000</div>
-        </div>
-        <div className="bg-white p-4 rounded shadow-sm">
-          <div className="text-sm text-gray-500">Expenses</div>
-          <div className="text-2xl font-semibold mt-2">₹ 23,000</div>
-        </div>
-      </div>
-
-      <div className="bg-white p-4 rounded shadow-sm">
-        <h3 className="font-semibold mb-2">Recent Activity</h3>
-        <ul className="text-sm text-gray-600">
-          <li>Payment received from ABC Co — ₹ 5,000</li>
-          <li>Invoice #23 sent to XYZ Pvt Ltd</li>
-          <li>New item 'Widget' added</li>
-        </ul>
-      </div>
+      </Card>
     </div>
   );
 }

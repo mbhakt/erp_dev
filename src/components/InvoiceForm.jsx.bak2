@@ -1,0 +1,467 @@
+// src/components/InvoiceForm.jsx
+import React, { useEffect, useMemo, useState, useRef } from "react";
+import {
+  fetchParties,
+  fetchItems,
+  createInvoice,
+  updateInvoice,
+  fetchInvoice,
+  fetchInvoices,
+} from "../api";
+
+/* ---------- Helpers ---------- */
+function fmtDateForInput(isoOrDate) {
+  if (!isoOrDate) return "";
+  const d = new Date(isoOrDate      </div>
+    </div>
+  );
+  if (Number.isNaN(d.getTime())) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+function formatIndianDate(isoOrDate) {
+  if (!isoOrDate) return "";
+  const d = new Date(isoOrDate);
+  if (Number.isNaN(d.getTime())) return "";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+}
+function parseInvoiceNoNumber(invNo) {
+  if (!invNo) return NaN;
+  const m = String(invNo).match(/(\d+)\s*$/);
+  return m ? Number(m[1]) : NaN;
+}
+function computeRowAmount(row) {
+  const qty = Number(row.qty || 0);
+  const rate = Number(row.unit_price || row.price || 0);
+  const disc = Number(row.discount || 0);
+  const amt = qty * rate - disc;
+  return Number.isNaN(amt) ? 0 : amt;
+}
+function unwrap(res) {
+  if (!res) return res;
+  if (Array.isArray(res)) return res;
+  if (res.data) return res.data;
+  if (res.invoice) return res.invoice;
+  return res;
+}
+
+/* ---------- Component ---------- */
+/**
+ * InvoiceForm
+ *
+ * Props:
+ * - invoiceId (optional) - when provided, form loads invoice for edit
+ * - onSaved(res) - callback after successful save (receives response)
+ * - onCancel() - callback when user cancels
+ *
+ * Note: this component doesn't auto-reload the page. Parent should refresh list onSaved.
+ */
+export default function InvoiceForm({ invoiceId = null, onSaved = null, onCancel = null }) {
+  const mountedRef = useRef(false);
+
+  // data masters
+  const [parties, setParties] = useState([]);
+  const [itemsMaster, setItemsMaster] = useState([]);
+
+  // loading / saving states
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // invoice state
+  const initialForm = {
+    invoice_no: "",
+    party_id: "",
+    invoice_date: fmtDateForInput(new Date()),
+    notes: "",
+  };
+  const [form, setForm] = useState(initialForm);
+  // rows: item lines
+  const [rows, setRows] = useState([{ item_id: "", qty: 1, unit_price: 0, discount: 0 }]);
+
+  // track last numeric invoice for create validation / suggestion
+  const [lastInvoiceNumeric, setLastInvoiceNumeric] = useState(null);
+
+  // load parties + items master once
+  useEffect(() => {
+    fetchParties()
+      .then((r) => {
+        const arr = unwrap(r) || [];
+        setParties(Array.isArray(arr) ? arr : []);
+      })
+      .catch(() => setParties([]));
+    fetchItems()
+      .then((r) => {
+        const arr = unwrap(r) || [];
+        setItemsMaster(Array.isArray(arr) ? arr : []);
+      })
+      .catch(() => setItemsMaster([]));
+  }, []);
+
+  // propose next invoice no ONLY for new invoices (not editing)
+  useEffect(() => {
+    async function loadLast() {
+      // do not propose when editing
+      if (invoiceId) return;
+      try {
+        const res = await fetchInvoices({ limit: 1, sort: "-invoice_no" }).catch(() => null);
+        let arr = [];
+        if (res) {
+          if (Array.isArray(res)) arr = res;
+          else if (Array.isArray(res.data)) arr = res.data;
+          else if (Array.isArray(res.invoices)) arr = res.invoices;
+        }
+        if (arr.length > 0) {
+          const first = arr[0];
+          const invNo = first.invoice_no ?? first.invoiceNo ?? "";
+          const n = parseInvoiceNoNumber(invNo);
+          if (!Number.isNaN(n)) {
+            setLastInvoiceNumeric(n);
+            setForm((f) => {
+              if (f.invoice_no) return f; // don't override user-entered
+              // determine prefix and pad length
+              const m = String(invNo).match(/^(.*?)(\d+)\s*$/);
+              const digits = m ? m[2].length : Math.max(String(n + 1).length, 3);
+              const nextNum = String(n + 1).padStart(Math.max(digits, 3), "0"); // 3-digit padding by default
+              const prefix = m ? (m[1] || "") : "";
+              return { ...f, invoice_no: `${prefix}${nextNum}` };
+            });
+          }
+        } else {
+          // no invoices yet, propose "001"
+          setForm((f) => (f.invoice_no ? f : { ...f, invoice_no: `001` }));
+          setLastInvoiceNumeric(0);
+        }
+      } catch (err) {
+        // ignore silently
+      }
+    }
+    loadLast();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoiceId]);
+
+  // load invoice details when editing
+  useEffect(() => {
+    if (!invoiceId) return;
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const invoice = await fetchInvoice(invoiceId);
+        if (!invoice) throw new Error("No invoice returned");
+        // map invoice fields
+        const nInv = normalizeInvoice(invoice);
+        // set simple fields from normalized invoice
+        
+        if (!cancelled) setRows(nInv.items && nInv.items.length>0 ? nInv.items : [{ item_id: "", qty: 1, unit_price: 0, discount: 0 }]);
+      } catch (err) {
+        console.error("Failed to load invoice", err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return (
+    <div className="fixed inset-0 bg-black/30 z-40 flex items-start justify-center p-6">
+      <div className="w-full max-w-4xl mt-8">
+) => {
+      cancelled = true;
+    };
+  }, [invoiceId]);
+
+  // Whenever items master becomes available, fill unit_price for rows that lack it
+  useEffect(() => {
+    if (!itemsMaster || !itemsMaster.length) return;
+    setRows((prev) =>
+      prev.map((r) => {
+        if (r.item_id && (!r.unit_price || Number(r.unit_price) === 0)) {
+          const it = itemsMaster.find((x) => String(x.id) === String(r.item_id) || String(x.item_id) === String(r.item_id));
+          const price = Number(it?.sale_price ?? it?.price ?? it?.rate ?? 0) || r.unit_price;
+          return { ...r, unit_price: price || r.unit_price };
+        }
+        return r;
+      })
+    );
+  }, [itemsMaster]);
+
+  // computed totals
+  const total = useMemo(() => rows.reduce((acc, r) => acc + computeRowAmount(r), 0), [rows]);
+
+  
+  // select an item from itemsMaster into a row
+  function selectItemForRow(rowIndex, item) {
+    setRows(prev => prev.map((r2, i2) => {
+      if (i2 !== rowIndex) return r2;
+      const price = Number(item.sale_price ?? item.price ?? item.rate ?? 0) || r2.unit_price;
+      return { ...r2, item_id: String(item.id ?? item._id ?? item.item_id ?? ''), unit_price: price, _searchText: item.name ?? '', _showDropdown: false };
+    }));
+  }
+  // quick add new blank row
+  function addBlankRow() {
+    setRows(prev => ([...prev, { item_id: '', qty: 1, unit_price: 0, discount: 0 }]));
+  }
+/* ---------- row operations ---------- */
+  function updateRow(idx, changes) {
+    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...changes } : r)));
+  }
+  function addRow() {
+    setRows((r) => [...r, { item_id: "", qty: 1, unit_price: 0, discount: 0 }]);
+  }
+  function removeRow(idx) {
+    setRows((r) => r.filter((_, i) => i !== idx));
+  }
+
+  /* ---------- Save ---------- */
+  async function handleSave() {
+    if (saving) return;
+    setSaving(true);
+
+    // Simple validations
+    if (!form.party_id) {
+      setSaving(false);
+      return alert("Please select a party.");
+    }
+    if (!form.invoice_no) {
+      setSaving(false);
+      return alert("Invoice number required.");
+    }
+    if (!rows.length) {
+      setSaving(false);
+      return alert("Add at least one item.");
+    }
+
+    // On create, ensure numeric suffix is lastInvoiceNumeric+1 (if we have last)
+    if (!invoiceId && lastInvoiceNumeric !== null) {
+      const numeric = parseInvoiceNoNumber(form.invoice_no);
+      if (Number.isNaN(numeric)) {
+        setSaving(false);
+        return alert("Invoice number must contain a numeric suffix (e.g. 001).");
+      }
+      if (numeric !== lastInvoiceNumeric + 1) {
+        setSaving(false);
+        return alert(
+          `Invoice numeric suffix must be previous invoice number +1. Previous: ${String(lastInvoiceNumeric).padStart(3, "0")}. Your invoice numeric part should be ${String(lastInvoiceNumeric + 1).padStart(3, "0")}.`
+        );
+      }
+    }
+
+    const payload = {
+      invoice_no: form.invoice_no,
+      party_id: form.party_id,
+      invoice_date: form.invoice_date,
+      notes: form.notes,
+      total: Number(total || 0),
+      items: rows.map((r) => ({
+        item_id: r.item_id,
+        qty: Number(r.qty || 0),
+        unit_price: Number(r.unit_price || 0),
+        discount: Number(r.discount || 0),
+        amount: computeRowAmount(r),
+      })),
+    };
+
+    try {
+      let res;
+      if (invoiceId) {
+        res = await updateInvoice(invoiceId, payload);
+      } else {
+        res = await createInvoice(payload);
+      }
+
+      alert("Saved successfully.");
+
+      if (typeof onSaved === "function") {
+        try {
+          onSaved(res);
+        } catch (e) {
+          console.error("onSaved callback error", e);
+        }
+      }
+    } catch (err) {
+      console.error("Save failed", err);
+      alert("Save failed. See console/network/server logs.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleCancel() {
+    if (typeof onCancel === "function") {
+      try {
+        onCancel();
+      } catch (e) {}
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/30 z-40 flex items-start justify-center p-6">
+      <div className="w-full max-w-4xl mt-8">
+
+    <div className="p-6 bg-white rounded-2xl shadow-lg">
+      <h3 className="text-lg font-semibold mb-3">{invoiceId ? "Edit Invoice" : "New Invoice"}</h3>
+      {loading ? <div className="mb-3">Loading invoice...</div> : null}
+
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Invoice No</label>
+          <input
+            className="w-full border p-2 rounded"
+            value={form.invoice_no}
+            onChange={(e) => setForm({ ...form, invoice_no: e.target.value })}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Invoice Date</label>
+          <input
+            type="date"
+            className="w-full border p-2 rounded"
+            value={form.invoice_date}
+            onChange={(e) => setForm({ ...form, invoice_date: e.target.value })}
+          />
+          <div className="text-xs text-gray-600 mt-1">Display: {formatIndianDate(form.invoice_date)}</div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Party</label>
+          <select
+            className="w-full border p-2 rounded"
+            value={form.party_id}
+            onChange={(e) => setForm({ ...form, party_id: e.target.value })}
+          >
+            <option value="">-- Select Party --</option>
+            {parties.map((p) => (
+              <option key={p.id ?? p._id} value={String(p.id ?? p._id)}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Notes</label>
+          <input
+            className="w-full border p-2 rounded"
+            value={form.notes}
+            onChange={(e) => setForm({ ...form, notes: e.target.value })}
+          />
+        </div>
+      </div>
+
+      <div className="mb-3">
+        
+      <div className="mb-2 flex items-center justify-end"><button type="button" className="px-3 py-1 bg-green-600 text-white rounded" onClick={addBlankRow}>+ Add Item</button></div>
+<table className="min-w-full table-auto">
+          <thead>
+            <tr className="text-left">
+              <th className="p-2">Item</th>
+              <th className="p-2">Qty</th>
+              <th className="p-2">Rate</th>
+              <th className="p-2">Discount</th>
+              <th className="p-2">Amount</th>
+              <th className="p-2"> </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, idx) => {
+              const amt = computeRowAmount(r);
+              return (
+    <div className="fixed inset-0 bg-black/30 z-40 flex items-start justify-center p-6">
+      <div className="w-full max-w-4xl mt-8">
+
+                <tr key={idx} className="border-t">
+                  <td className="p-2">
+                    
+<div className="relative">
+  <input
+    type="text"
+    className="border p-1 rounded w-full"
+    placeholder="Search product by name or code..."
+    value={r._searchText ?? (itemsMaster.find(x => String(x.id)===String(r.item_id))?.name ?? '')}
+    onChange={(e) => {
+      const v = e.target.value;
+      // update a temporary search text in the row state
+      setRows(prev => prev.map((row, i2) => i2===idx ? ({...row, _searchText: v}) : row));
+    }}
+    onFocus={() => setRows(prev => prev.map((row, i2) => i2===idx ? ({...row, _showDropdown: true}) : row))}
+    onBlur={() => setTimeout(()=> setRows(prev => prev.map((row, i2) => i2===idx ? ({...row, _showDropdown: false}) : row)), 150)}
+  />
+  {/* dropdown */}
+  { (r._showDropdown || false) && (
+    <div className="absolute z-20 left-0 right-0 bg-white border mt-1 max-h-48 overflow-auto rounded shadow">
+      {( (r._searchText ?? '') ? itemsMaster.filter(it=> (it.name||'').toLowerCase().includes((r._searchText||'').toLowerCase()) || (String(it.id||'')).includes((r._searchText||''))) : itemsMaster.slice(0,12)).map(it => (
+        <div key={it.id} className="p-2 hover:bg-gray-100 cursor-pointer flex justify-between items-center" onMouseDown={(ev)=>{ ev.preventDefault(); /* select */ selectItemForRow(idx, it); }}>
+          <div>
+            <div className="font-medium">{it.name}</div>
+            <div className="text-xs text-gray-500">SKU: {it.sku ?? it.code ?? it.id}</div>
+          </div>
+          <div className="text-sm">₹ {Number(it.sale_price ?? it.price ?? it.rate ?? 0).toFixed(2)}</div>
+        </div>
+      ))}
+      { !( (r._searchText ?? '') ) && itemsMaster.length===0 && <div className="p-2 text-sm text-gray-500">No products</div>}
+    </div>
+  )}
+</div>
+
+                  </td>
+                  <td className="p-2">
+                    <input
+                      type="number"
+                      className="border p-1 w-20 rounded"
+                      value={r.qty}
+                      onChange={(e) => updateRow(idx, { qty: Number(e.target.value) })}
+                    />
+                  </td>
+                  <td className="p-2">
+                    <input
+                      type="number"
+                      className="border p-1 w-28 rounded"
+                      value={r.unit_price}
+                      onChange={(e) => updateRow(idx, { unit_price: Number(e.target.value) })}
+                    />
+                  </td>
+                  <td className="p-2">
+                    <input
+                      type="number"
+                      className="border p-1 w-28 rounded"
+                      value={r.discount}
+                      onChange={(e) => updateRow(idx, { discount: Number(e.target.value) })}
+                    />
+                  </td>
+                  <td className="p-2">₹ {Number(amt || 0).toFixed(2)}</td>
+                  <td className="p-2">
+                    <button className="px-2 py-1 border rounded" onClick={() => removeRow(idx)}>
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+
+        <div className="mt-2">
+          <button className="px-3 py-1 border rounded mr-2" onClick={addRow}>
+            + Add line
+          </button>
+        </div>
+      </div>
+
+      <div className="flex justify-between items-center">
+        <div>
+          <button className="px-4 py-2 bg-blue-600 text-white rounded mr-2" onClick={handleSave} disabled={saving}>
+            {saving ? "Saving..." : "Save"}
+          </button>
+          <button className="px-4 py-2 border rounded" onClick={handleCancel}>
+            Cancel
+          </button>
+        </div>
+
+        <div className="font-semibold">Total: ₹ {Number(total || 0).toFixed(2)}</div>
+      </div>
+    </div>
+  );
+}

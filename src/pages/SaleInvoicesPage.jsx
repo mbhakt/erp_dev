@@ -1,230 +1,241 @@
 // src/pages/SaleInvoicesPage.jsx
-import React, { useState, useEffect } from "react";
-import SharedTable from "../components/SharedTable";
-import AppLayout from "../components/AppLayout";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import InvoiceForm from "../components/InvoiceForm";
- import {
-   fetchInvoices,
-   fetchItems,
-   createInvoice,
-   updateInvoice,
-   deleteInvoice,
- } from "../api";
+import { fetchInvoices, deleteInvoice } from "../api";
+import { canonicalId } from "../utils/normalize"; // keep if used elsewhere
+import { formatCurrencyINR } from "../utils/format";
+import AppLayout from "../components/AppLayout";
 
+/**
+ * SaleInvoicesPage
+ * - Table + summary
+ * - Single modal used for both Add and Edit
+ * - Inline edit panel removed (Edit now opens modal)
+ */
 export default function SaleInvoicesPage() {
   const [invoices, setInvoices] = useState([]);
-  const [openEditor, setOpenEditor] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [items, setItems] = useState([]);
-  
-  // Helper: return invoice amount from different possible fields or compute from lines
-const getInvoiceAmount = (inv) => {
-  if (!inv) return 0;
-  // direct known fields
-  if (Number.isFinite(Number(inv.grand_total))) return Number(inv.grand_total);
-  if (Number.isFinite(Number(inv.total_amount))) return Number(inv.total_amount);
-  if (Number.isFinite(Number(inv.amount))) return Number(inv.amount);
-  if (Number.isFinite(Number(inv.total))) return Number(inv.total);
+  const [loading, setLoading] = useState(false);
 
-  // sometimes the API returns nested summaries:
-  if (inv.summary && Number.isFinite(Number(inv.summary.grand_total))) return Number(inv.summary.grand_total);
+  // modalMode: 'add' | 'edit' | null
+  const [modalMode, setModalMode] = useState(null);
+  const [modalInvoiceId, setModalInvoiceId] = useState(null);
 
-  // if there are line items, compute: sum(qty * rate) + tax if present
-  const lines = inv.lines || inv.items || inv.invoice_lines || [];
-  if (Array.isArray(lines) && lines.length) {
-    let subtotal = 0;
-    let taxtotal = 0;
-    for (const l of lines) {
-      const qty = Number(l.qty ?? l.quantity ?? 0) || 0;
-      const rate = Number(l.rate ?? l.unit_price ?? l.price ?? 0) || 0;
-      const lineTotal = qty * rate;
-      subtotal += lineTotal;
-      // tax may be given directly or as taxPercent
-      if (l.tax_amount !== undefined && Number.isFinite(Number(l.tax_amount))) {
-        taxtotal += Number(l.tax_amount);
-      } else if (l.taxPercent !== undefined || l.tax_rate !== undefined) {
-        const pct = Number(l.taxPercent ?? l.tax_rate ?? 0) || 0;
-        taxtotal += (lineTotal * pct) / 100;
+  // modalMode/modalInvoiceId already exist in your component
+const [modalVisible, setModalVisible] = useState(false); // controls mounting
+const [modalActive, setModalActive] = useState(false);   // controls animation classes
+
+  const loadInvoices = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetchInvoices({ limit: 100, sort: "-id" }).catch(() => null);
+      let arr = [];
+      if (res) {
+        if (Array.isArray(res)) arr = res;
+        else if (Array.isArray(res?.data)) arr = res.data;
+        else if (Array.isArray(res?.invoices)) arr = res.invoices;
+        else if (Array.isArray(res?.rows)) arr = res.rows;
       }
+      setInvoices(Array.isArray(arr) ? arr : []);
+    } catch (err) {
+      console.error("Failed to load invoices", err);
+      setInvoices([]);
+    } finally {
+      setLoading(false);
     }
-    return Number((subtotal + taxtotal).toFixed(2));
-  }
-
-  // final fallback
-  return 0;
-};
-
-// format date as DD-MM-YYYY
-const formatDateDDMMYYYY = (iso) => {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (isNaN(d)) return "";
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  return `${dd}-${mm}-${yyyy}`;
-};
-
-// currency formatter (India/Rupee) with two decimals
-const fmt = new Intl.NumberFormat("en-IN", {
-  style: "currency",
-  currency: "INR",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-async function loadItems() {
-  try {
-    const data = await fetchItems();
-    setItems(Array.isArray(data) ? data : []);
-  } catch (err) {
-    console.error("Failed to load items:", err);
-  }
-}
-
-  async function loadInvoices() {
-  try {
-    const data = await fetchInvoices();
-    const arr = Array.isArray(data) ? data : [];
-
-    // compute amount and formatted display for each invoice
-    const withAmount = arr.map((inv) => {
-      const numeric = getInvoiceAmount(inv) || 0;
-      // ensure number with two decimals for arithmetic
-      const numericTwo = Number(Number(numeric).toFixed(2));
-      return {
-        ...inv,
-        // numeric amount used for totals / computations
-        amount: numericTwo,
-        // preformatted react node to let SharedTable render correctly and align right
-        amount_display: (
-          <div style={{ textAlign: "right" }}>
-            {fmt.format(numericTwo)}
-          </div>
-        ),
-      };
-    });
-
-    setInvoices(withAmount);
-  } catch (err) {
-    console.error("Failed to load invoices:", err);
-  }
-}
+  }, []);
 
   useEffect(() => {
     loadInvoices();
-    loadItems();
-  }, []);
+  }, [loadInvoices]);
 
-  function handleAdd() {
-    setEditing(null);
-    setOpenEditor(true);
+  const pageTotal = useMemo(
+    () => invoices.reduce((s, inv) => s + Number(inv.total ?? inv.amount ?? 0), 0),
+    [invoices]
+  );
+
+  useEffect(() => {
+  function onKey(e) {
+    if (e.key === "Escape" && modalVisible) closeModal();
   }
+  if (modalVisible) {
+    document.body.style.overflow = "hidden"; // lock scroll
+    window.addEventListener("keydown", onKey);
+  } else {
+    document.body.style.overflow = ""; // restore
+  }
+  return () => {
+    window.removeEventListener("keydown", onKey);
+    document.body.style.overflow = "";
+  };
+}, [modalVisible]);
 
-  function handleEdit(row) {
-    setEditing(row);
-    setOpenEditor(true);
+  // Open modal in "add" mode
+  function handleOpenAdd() {
+  setModalMode("add");
+  setModalInvoiceId(null);
+  setModalVisible(true);
+  // next frame -> activate transitions
+  requestAnimationFrame(() => setModalActive(true));
+}
+
+  // Open modal in "edit" mode for given id
+  function handleOpenEdit(id) {
+  setModalMode("edit");
+  setModalInvoiceId(id);
+  setModalVisible(true);
+  requestAnimationFrame(() => setModalActive(true));
+}
+
+  // Close modal (reset)
+  function closeModal() {
+  // start exit animation
+  setModalActive(false);
+  // wait for animation to finish before unmounting
+  setTimeout(() => {
+    setModalVisible(false);
+    setModalMode(null);
+    setModalInvoiceId(null);
+  }, 320); // match duration below (300ms)
+}
+
+  // Called after InvoiceForm saves successfully
+  function handleSaved() {
+    // reload list and close
+    loadInvoices();
+    closeModal();
   }
 
   async function handleDelete(id) {
-    if (!window.confirm("Delete this invoice?")) return;
+    if (!window.confirm("Delete invoice?")) return;
     try {
       await deleteInvoice(id);
-      loadInvoices();
+      await loadInvoices();
     } catch (err) {
-      console.error("Failed to delete invoice:", err);
+      console.error("Delete failed", err);
+      alert("Delete failed");
     }
   }
-
-  async function handleSave(payload) {
-    try {
-      if (editing?.id) {
-        await updateInvoice(editing.id, payload);
-      } else {
-        await createInvoice(payload);
-      }
-      setOpenEditor(false);
-      setEditing(null);
-      loadInvoices();
-    } catch (err) {
-      console.error("Save failed:", err);
-    }
-  }
-
-  const columns = [
-  {
-    key: "invoice_date",
-    label: "Date",
-    render: (row) => <div>{formatDateDDMMYYYY(row.invoice_date)}</div>,
-  },
-  { key: "invoice_no", label: "Invoice no" },
-  { key: "party_name", label: "Party Name" },
-  {
-    key: "amount_display", // SharedTable will call render if present; we prepared amount_display earlier
-    label: <div style={{ textAlign: "right" }}>Amount</div>,
-    // If you didn't create amount_display, use render to format numeric amount:
-    render: (row) => <div style={{ textAlign: "right" }}>{fmt.format(row.amount || getInvoiceAmount(row) || 0)}</div>,
-  },
-];
-
-// compute total using numeric `amount`
-const totalSales = invoices.reduce((s, i) => s + Number(i.amount || 0), 0);
 
   return (
     <AppLayout>
       <div className="p-6">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-semibold">Sale Invoices</h1>
           <div>
+            <h2 className="text-2xl font-semibold">Sale Invoices</h2>
+            <div className="text-sm text-slate-500">Total invoices: {invoices.length}</div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="text-xl font-bold">{formatCurrencyINR(pageTotal)}</div>
             <button
-              className="px-4 py-2 rounded bg-pink-500 text-white"
-              onClick={handleAdd}
+              onClick={handleOpenAdd}
+              className="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded"
             >
               + Add Sale
             </button>
           </div>
         </div>
 
-        <div className="bg-white rounded shadow p-4">
-          <div className="mb-4 text-sm text-slate-600">Total Sales Amount</div>
-          <div className="text-2xl font-semibold mb-4">
-  {fmt.format(totalSales)}
-</div>
-
-          <SharedTable
-            columns={columns}
-            data={invoices}
-            actions={(row) => (
-              <>
-                <button
-                  className="px-2 py-1 rounded border mr-2"
-                  onClick={() => handleEdit(row)}
-                >
-                  Edit
-                </button>
-                <button
-                  className="px-2 py-1 rounded border"
-                  onClick={() => handleDelete(row.id)}
-                >
-                  Delete
-                </button>
-              </>
-            )}
-          />
+        <div className="bg-white rounded shadow p-4 mb-6">
+          <div className="overflow-x-auto">
+            <table className="min-w-full">
+              <thead className="bg-slate-50 sticky top-0">
+                <tr>
+                  <th className="p-3 text-left text-sm">Date</th>
+                  <th className="p-3 text-left text-sm">Invoice no</th>
+                  <th className="p-3 text-left text-sm">Party Name</th>
+                  <th className="p-3 text-right text-sm">Amount</th>
+                  <th className="p-3 text-center text-sm">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} className="p-6 text-center">
+                      Loading...
+                    </td>
+                  </tr>
+                ) : invoices.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="p-6 text-center">
+                      No invoices found.
+                    </td>
+                  </tr>
+                ) : (
+                  invoices.map((inv) => (
+                    <tr key={inv.id ?? inv._id} className="border-t hover:bg-slate-50">
+                      <td className="p-3">
+                        {new Date(inv.invoice_date ?? inv.created_at ?? inv.createdAt ?? Date.now()).toLocaleDateString()}
+                      </td>
+                      <td className="p-3 whitespace-nowrap">{inv.invoice_no ?? inv.invoiceNo ?? ""}</td>
+                      <td className="p-3">{inv.party_name ?? inv.partyName ?? inv.customer_name ?? ""}</td>
+                      <td className="p-3 text-right">{formatCurrencyINR(inv.total ?? inv.amount ?? 0)}</td>
+                      <td className="p-3 text-center">
+                        <button
+                          onClick={() => handleOpenEdit(inv.id ?? inv._id)}
+                          className="px-2 py-1 border rounded mr-2 text-sm"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDelete(inv.id ?? inv._id)}
+                          className="px-2 py-1 border rounded text-sm text-red-600"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        {openEditor && (
-          <InvoiceForm
-            open={true}
-            invoice={editing}
-            items={items}
-            onClose={() => {
-              setOpenEditor(false);
-              setEditing(null);
-            }}
-            onSave={handleSave}
-          />
-        )}
+        {/* Add/Edit modal (animated fade + slide) */}
+{modalVisible && (
+  <div
+    className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-opacity duration-320 ${
+      modalActive ? "opacity-100" : "opacity-0"
+    }`}
+    aria-hidden={!modalActive}
+  >
+    {/* backdrop (click to close) */}
+    <div
+      className={`absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity duration-320 ${
+        modalActive ? "opacity-100" : "opacity-0"
+      }`}
+      onClick={closeModal}
+    />
+
+    {/* modal panel */}
+    <div
+      className={`relative bg-white w-full max-w-3xl rounded shadow p-5 transform transition-all duration-320
+        ${modalActive ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-4 scale-95"}`}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold">
+          {modalMode === "add" ? "Add Sale" : "Edit Sale"}
+        </h3>
+        <button onClick={closeModal} className="text-slate-500 hover:text-slate-700">
+          Close
+        </button>
+      </div>
+
+      <InvoiceForm
+        invoiceId={modalMode === "edit" ? modalInvoiceId : null}
+        onSaved={() => {
+          handleSaved(); // reloads list
+          // close with animation
+          closeModal();
+        }}
+        onCancel={() => closeModal()}
+      />
+    </div>
+  </div>
+)}
       </div>
     </AppLayout>
   );

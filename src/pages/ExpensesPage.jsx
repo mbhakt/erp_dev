@@ -1,55 +1,62 @@
-import React, { useState } from "react";
-import SharedTable from "../components/SharedTable";
-import PurchaseModal from "../components/PurchaseModal";
-import AppLayout from "../components/AppLayout";
+import React, {useEffect, useState} from 'react';
+import AppLayout from '../components/AppLayout';
+import { Card, Table, Button, Modal, Form, InputNumber, Input, DatePicker, message } from 'antd';
+import BottomButtonBar from '../components/BottomButtonBar';
+import * as api from '../api/index';
+import dayjs from 'dayjs';
+import { currencyINR } from '../utils/currencyINR';
 
-const cols = [
-  { key: "date", label: "Date" },
-  { key: "ref", label: "Voucher No" },
-  { key: "category", label: "Category" },
-  { key: "amount", label: "Amount" },
-];
-
-const demo = [
-  { id: "e1", date: "2025-09-05", ref: "EX-001", category: "Office Supplies", vendor: "Office", paymentType: "Cash", amount: 200 },
-];
-
-export default function ExpensesPage() {
-  const [data, setData] = useState(demo);
-  const [open, setOpen] = useState(false);
+export default function ExpensesPage(){
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [form] = Form.useForm();
 
-  function openAdd() {
-    setEditing(null);
-    setOpen(true);
-  }
-  function openEdit(row) {
-    setEditing(row);
-    setOpen(true);
-  }
-  function handleSave(item) {
-    setData((d) => {
-      const exists = d.find((x) => x.id === item.id);
-      if (exists) return d.map((r) => (r.id === item.id ? item : r));
-      return [item, ...d];
-    });
-    setOpen(false);
-  }
+  useEffect(()=>{ load(); },[]);
+  async function load(){ setLoading(true); try{ const res = await api.getExpenses(); setRows(res||[]); }catch(e){console.error(e);} setLoading(false); }
+
+  const openAdd = ()=>{ setEditing(null); form.resetFields(); form.setFieldsValue({date: dayjs()}); Modal.confirm = undefined; Modal.info; Modal.confirm; Modal.success; Modal.error; }
+  const handleSave = async (stay)=> {
+    try{
+      const vals = await form.validateFields();
+      setSaving(true);
+      const payload = { date: vals.date ? vals.date.format('YYYY-MM-DD') : null, category: vals.category, amount: vals.amount, note: vals.note };
+      if (editing && editing.id) await api.updateExpense(editing.id, payload); else await api.createExpense(payload);
+      message.success('Saved');
+      if (stay) { form.resetFields(); form.setFieldsValue({date: dayjs()}); } else { load(); }
+    }catch(e){ message.error('Save failed'); } finally { setSaving(false); }
+  };
+
+  const columns = [
+    { title:'Date', dataIndex:'date', render:d=> d ? dayjs(d).format('DD-MM-YYYY') : '-' },
+    { title:'Category', dataIndex:'category' },
+    { title:'Amount', dataIndex:'amount', render:a=>currencyINR(a) },
+    { title:'Note', dataIndex:'note' },
+  ];
 
   return (
     <AppLayout>
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-semibold">Expenses</h1>
-        <button onClick={openAdd} className="px-3 py-2 rounded bg-amber-500 text-slate-900">+ Add Expense</button>
+      <div style={{padding:16}}>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}><h2>Expenses</h2><Button onClick={()=>openAdd()}>+ Add</Button></div>
+        <Card style={{marginTop:12}}>
+          <Table dataSource={rows} columns={columns} rowKey={r=>r.id} />
+        </Card>
+
+        <Modal title={editing ? 'Edit Expense' : 'Add Expense'} open={false} onCancel={()=>{}} footer={null}>
+          <Form form={form} layout="vertical">
+            <Form.Item name="date" label="Date"><DatePicker format="DD-MM-YYYY" defaultValue={dayjs()} /></Form.Item>
+            <Form.Item name="category" label="Category" rules={[{required:true}]}><Input /></Form.Item>
+            <Form.Item name="amount" label="Amount" rules={[{required:true}]}><InputNumber min={0} step={0.01} /></Form.Item>
+            <Form.Item name="note" label="Note"><Input.TextArea rows={3} /></Form.Item>
+            <div style={{textAlign:'center', marginTop:12}}>
+              <Button type="primary" onClick={()=>handleSave(false)}>Save & Exit</Button>
+              <Button style={{marginLeft:8}} onClick={()=>handleSave(true)}>Save & New</Button>
+            </div>
+          </Form>
+        </Modal>
+
       </div>
-
-      <div className="mb-4 text-sm text-slate-600">Record expense vouchers and petty cash transactions.</div>
-
-      <SharedTable columns={cols} data={data.map(r => ({ ...r, amount: `₹ ${Number(r.amount).toFixed(2)}` }))} actions={(r) => <button className="px-2 py-1 rounded border" onClick={() => openEdit(r)}>Open</button>} />
-
-      <PurchaseModal open={open} initial={editing} onClose={() => setOpen(false)} onSave={handleSave} />
-    </div>
     </AppLayout>
   );
 }

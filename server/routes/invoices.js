@@ -1,168 +1,197 @@
 // server/routes/invoices.js
+// Express router for invoices with joined items so frontend can directly display product names.
+
 const express = require("express");
 const router = express.Router();
+const dbQuery = require("../lib/dbQuery");
 
-// If your project uses a DB helper like server/db.js, require it. Otherwise, we fallback to db.json in project root.
-let db;
-try {
-  db = require("../db"); // expected to export a pool or helper methods
-} catch (e) {
-  db = null;
+/**
+ * Helper to normalize invoice row results into consistent shape
+ */
+function normalizeInvoiceRow(row) {
+  return {
+    row_id: row.row_id ?? row.id ?? null,
+    item_id: row.item_id != null ? String(row.item_id) : null,
+    item_name: row.item_name ?? row.name ?? row.description ?? null,
+    qty: Number(row.qty ?? row.quantity ?? 1),
+    unit_price: Number(row.unit_price ?? row.price ?? row.rate ?? row.sale_price ?? 0),
+    discount: Number(row.discount ?? 0),
+    amount: Number(row.amount ?? row.line_total ?? ((row.qty ?? 0) * (row.unit_price ?? 0))) || 0,
+  };
 }
 
-const fs = require("fs");
-const path = require("path");
-const DB_JSON = path.join(__dirname, "..", "..", "db.json");
-
-// helper: read db.json if DB helper not present
-function readJsonDb() {
+/**
+ * GET /api/invoices
+ * List invoices (header only)
+ */
+router.get("/invoices", async (req, res) => {
   try {
-    const raw = fs.readFileSync(DB_JSON, "utf8");
-    const data = JSON.parse(raw);
-    return data;
+    const sql = `SELECT i.*, p.name AS party_name
+                 FROM invoices i
+                 LEFT JOIN parties p ON p.id = i.party_id
+                 ORDER BY i.id DESC`;
+    const rows = await dbQuery(sql);
+    return res.json(rows);
   } catch (err) {
-    return {};
-  }
-}
-
-// GET /api/invoices  -> list
-router.get("/", async (req, res) => {
-  try {
-    if (db && typeof db.query === "function") {
-      // If server/db.js exports a mysql pool with query
-      const q = "SELECT * FROM invoices ORDER BY id DESC";
-      const [rows] = await db.query(q);
-      // optionally attach items per invoice (simple separate query)
-      // but to keep it simple, return invoices only and let frontend fetch items via /api/invoices/:id
-      return res.json(rows);
-    } else {
-      // fallback: read db.json
-      const data = readJsonDb();
-      const invoices = data.invoices || [];
-      return res.json(invoices);
-    }
-  } catch (err) {
-    console.error("invoices list error:", err);
-    return res.status(500).json({ error: err.message || "server error" });
+    console.error("Error fetching invoices:", err);
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
-// GET /api/invoices/:id  -> single invoice + items (so frontend edit form can request full object)
-router.get("/:id", async (req, res) => {
-  const id = req.params.id;
+/**
+ * GET /api/invoices/:id
+ * Return invoice header + items joined to items table (fallback to purchase_items)
+ */
+router.get("/invoices/:id", async (req, res) => {
+  const invoiceId = req.params.id;
   try {
-    if (db && typeof db.query === "function") {
-      // adapt this SQL to your schema
-      const [rows] = await db.query("SELECT * FROM invoices WHERE id = ?", [id]);
-      if (!rows || rows.length === 0) return res.status(404).json({ error: "not found" });
-      const invoice = rows[0];
-      // fetch items for this invoice (if invoice_items table exists)
+    // Invoice header
+    const invSql = `SELECT i.*, p.name AS party_name
+                    FROM invoices i
+                    LEFT JOIN parties p ON p.id = i.party_id
+                    WHERE i.id = ? LIMIT 1`;
+    const invRows = await dbQuery(invSql, [invoiceId]);
+    if (!invRows || invRows.length === 0) {
+      return res.status(404).json({ error: "Invoice not found" });
+    }
+    const invoice = invRows[0];
+
+    // Try invoice_items join
+    const itemsSql = `
+      SELECT
+        ii.id AS row_id,
+        COALESCE(ii.item_id, ii.product_id) AS item_id,
+        ii.qty,
+        ii.unit_price,
+        ii.price,
+        ii.discount,
+        ii.line_total AS amount,
+        COALESCE(ii.description, '') AS description,
+        it.id AS item_id_fk,
+        it.name AS item_name,
+        it.sku AS item_sku,
+        it.sale_price AS item_sale_price,
+        it.code AS item_code
+      FROM invoice_items ii
+      LEFT JOIN items it
+        ON it.id = ii.item_id OR it.id = ii.product_id
+      WHERE ii.invoice_id = ?
+      ORDER BY ii.id ASC
+    `;
+    let rows = await dbQuery(itemsSql, [invoiceId]);
+
+    // Fallback: purchase_items (if schema uses purchase_items)
+    if (!rows || rows.length === 0) {
+      const altSql = `
+        SELECT
+          pi.id AS row_id,
+          COALESCE(pi.item_id, pi.product_id) AS item_id,
+          pi.qty,
+          pi.rate AS unit_price,
+          pi.price,
+          pi.discount,
+          pi.line_total AS amount,
+          COALESCE(pi.description, '') AS description,
+          it.id AS item_id_fk,
+          it.name AS item_name,
+          it.sku AS item_sku,
+          it.sale_price AS item_sale_price,
+          it.code AS item_code
+        FROM purchase_items pi
+        LEFT JOIN items it
+          ON it.id = pi.item_id OR it.id = pi.product_id
+        WHERE pi.purchase_id = ?
+        ORDER BY pi.id ASC
+      `;
       try {
-        const [items] = await db.query("SELECT * FROM invoice_items WHERE invoice_id = ?", [id]);
-        invoice.items = items;
-      } catch (e) {
-        // ignore if items table not present
+        rows = await dbQuery(altSql, [invoiceId]);
+      } catch (err) {
+        console.warn("purchase_items fallback failed:", err);
+        rows = [];
       }
-      return res.json(invoice);
-    } else {
-      const data = readJsonDb();
-      const inv = (data.invoices || []).find((x) => String(x.id) === String(id) || String(x.invoice_no) === String(id));
-      if (!inv) return res.status(404).json({ error: "not found" });
-      // if db.json contains invoice_items, attach them
-      const invItems = (data.invoice_items || []).filter((it) => String(it.invoice_id) === String(inv.id));
-      if (invItems.length) inv.items = invItems;
-      return res.json(inv);
     }
+
+    // Normalize rows
+    const normalizedRows = (rows || []).map((r) => {
+      const itemId = r.item_id ?? r.item_id_fk ?? null;
+      const itemName = r.item_name ?? r.description ?? null;
+      const qty = Number(r.qty ?? 1) || 1;
+      const unitPrice = Number(r.unit_price ?? r.price ?? r.item_sale_price ?? 0) || 0;
+      const discount = Number(r.discount ?? 0) || 0;
+      const amount = Number(r.amount ?? qty * unitPrice - discount) || 0;
+
+      return {
+        id: r.row_id,
+        item_id: itemId ? String(itemId) : null,
+        name: itemName,
+        qty,
+        unit_price: unitPrice,
+        discount,
+        amount,
+      };
+    });
+
+    const out = {
+      ...invoice,
+      items: normalizedRows,
+    };
+
+    return res.json(out);
   } catch (err) {
-    console.error("invoices get error:", err);
-    return res.status(500).json({ error: err.message || "server error" });
+    console.error("Error fetching invoice:", err);
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
-// POST /api/invoices  -> create (very simple)
-router.post("/", async (req, res) => {
+/**
+ * POST /api/invoices
+ */
+router.post("/invoices", async (req, res) => {
   try {
-    const payload = req.body;
-    if (db && typeof db.query === "function") {
-      // insert into invoices table - adapt fields for your schema
-      const [result] = await db.query("INSERT INTO invoices (invoice_no, party_id, invoice_date, total, notes) VALUES (?, ?, ?, ?, ?)",
-        [payload.invoice_no, payload.party_id, payload.invoice_date, payload.total, payload.notes]);
-      const newId = result.insertId;
-      // optionally insert invoice_items if provided
-      if (Array.isArray(payload.items) && payload.items.length) {
-        for (const it of payload.items) {
-          await db.query("INSERT INTO invoice_items (invoice_id, item_id, qty, unit_price, discount, amount) VALUES (?, ?, ?, ?, ?, ?)",
-            [newId, it.item_id, it.qty, it.unit_price, it.discount, it.amount]);
-        }
-      }
-      const [rows] = await db.query("SELECT * FROM invoices WHERE id = ?", [newId]);
-      return res.json(rows[0]);
-    } else {
-      // if using db.json fallback: append to file (not ideal for concurrency)
-      const data = readJsonDb();
-      data.invoices = data.invoices || [];
-      const nextId = (data.invoices.reduce((m, x) => Math.max(m, Number(x.id || 0)), 0) || 0) + 1;
-      const newInv = { id: nextId, ...payload };
-      data.invoices.push(newInv);
-      // attach invoice_items in db.json if present
-      data.invoice_items = data.invoice_items || [];
-      if (Array.isArray(payload.items)) {
-        for (const it of payload.items) {
-          data.invoice_items.push({ id: (data.invoice_items.length || 0) + 1, invoice_id: nextId, ...it });
-        }
-      }
-      fs.writeFileSync(DB_JSON, JSON.stringify(data, null, 2), "utf8");
-      return res.json(newInv);
-    }
+    const data = req.body;
+    const { invoice_no, party_id, invoice_date, total } = data;
+
+    const sql = `INSERT INTO invoices (invoice_no, party_id, invoice_date, total)
+                 VALUES (?, ?, ?, ?)`;
+    const result = await dbQuery(sql, [invoice_no, party_id, invoice_date, total]);
+
+    return res.json({ id: result.insertId, ...data });
   } catch (err) {
-    console.error("invoice create error:", err);
-    return res.status(500).json({ error: err.message || "server error" });
+    console.error("Error creating invoice:", err);
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
-// PUT /api/invoices/:id -> update (simplified)
-router.put("/:id", async (req, res) => {
-  const id = req.params.id;
-  const payload = req.body;
+/**
+ * PUT /api/invoices/:id
+ */
+router.put("/invoices/:id", async (req, res) => {
+  const invoiceId = req.params.id;
   try {
-    if (db && typeof db.query === "function") {
-      await db.query("UPDATE invoices SET invoice_no=?, party_id=?, invoice_date=?, total=?, notes=? WHERE id=?",
-        [payload.invoice_no, payload.party_id, payload.invoice_date, payload.total, payload.notes, id]);
-      // optionally update items - skipping complexity (delete & insert recommended)
-      const [rows] = await db.query("SELECT * FROM invoices WHERE id = ?", [id]);
-      return res.json(rows[0]);
-    } else {
-      const data = readJsonDb();
-      const idx = (data.invoices || []).findIndex(x => String(x.id) === String(id));
-      if (idx === -1) return res.status(404).json({ error: "not found" });
-      data.invoices[idx] = { ...data.invoices[idx], ...payload, id: Number(id) };
-      fs.writeFileSync(DB_JSON, JSON.stringify(data, null, 2), "utf8");
-      return res.json(data.invoices[idx]);
-    }
+    const data = req.body;
+    const { invoice_no, party_id, invoice_date, total } = data;
+
+    const sql = `UPDATE invoices SET invoice_no=?, party_id=?, invoice_date=?, total=? WHERE id=?`;
+    await dbQuery(sql, [invoice_no, party_id, invoice_date, total, invoiceId]);
+
+    return res.json({ id: invoiceId, ...data });
   } catch (err) {
-    console.error("invoice update error:", err);
-    return res.status(500).json({ error: err.message || "server error" });
+    console.error("Error updating invoice:", err);
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
-// DELETE /api/invoices/:id
-router.delete("/:id", async (req, res) => {
-  const id = req.params.id;
+/**
+ * DELETE /api/invoices/:id
+ */
+router.delete("/invoices/:id", async (req, res) => {
+  const invoiceId = req.params.id;
   try {
-    if (db && typeof db.query === "function") {
-      await db.query("DELETE FROM invoices WHERE id = ?", [id]);
-      // remove invoice_items optionally
-      return res.json({ ok: true });
-    } else {
-      const data = readJsonDb();
-      data.invoices = (data.invoices || []).filter(x => String(x.id) !== String(id));
-      data.invoice_items = (data.invoice_items || []).filter(it => String(it.invoice_id) !== String(id));
-      fs.writeFileSync(DB_JSON, JSON.stringify(data, null, 2), "utf8");
-      return res.json({ ok: true });
-    }
+    await dbQuery("DELETE FROM invoices WHERE id=?", [invoiceId]);
+    return res.json({ success: true });
   } catch (err) {
-    console.error("invoice delete error:", err);
-    return res.status(500).json({ error: err.message || "server error" });
+    console.error("Error deleting invoice:", err);
+    return res.status(500).json({ error: "Server error" });
   }
 });
 

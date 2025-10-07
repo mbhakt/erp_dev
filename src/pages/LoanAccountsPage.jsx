@@ -1,11 +1,17 @@
 import React from "react";
 import AppLayout from "../components/AppLayout";
-import StubPage from "../components/StubPage";
-
-export default function LoanAccountsPage() {
+import { Card } from "antd";
+export default function LoanAccountsPage(){
   return (
     <AppLayout>
-      <StubPage title="Loan Accounts" description="Loan account management (Placeholder)" />
+        <div className="p-4">
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-xl font-semibold">Loan Accounts Page</h1>
+        </div>
+      <Card>
+        <div className="card-empty">Loan accounts placeholder</div>
+      </Card>
+        </div>
     </AppLayout>
   );
 }

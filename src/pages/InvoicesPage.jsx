@@ -1,7 +1,8 @@
 // src/pages/InvoicesPage.jsx
 import React, { useEffect, useState } from "react";
-import InvoiceForm from "../components/InvoiceForm";
+import InvoiceEditor from "../pages/InvoiceEditor";
 import { fetchInvoices, deleteInvoice } from "../api";
+import { formatCurrencyINR } from "../utils/format";
 
 // Format a date to DD-MM-YYYY (Indian format)
 function formatIndianDate(isoOrDate) {
@@ -178,6 +179,12 @@ export default function InvoicesPage() {
     setShowForm(true);
   }
 
+  // find currently editing invoice object from loaded invoices
+  const editingInvoiceObject = editingId ? invoices.find(inv => {
+    const curId = inv.id ?? inv._id ?? inv.invoice_id ?? inv.invoiceNo ?? inv.invoice_no;
+    return String(curId) === String(editingId);
+  }) : null;
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-4">
@@ -221,11 +228,11 @@ export default function InvoicesPage() {
                   const id = inv.id ?? inv._id ?? inv.invoice_id ?? inv.invoiceNo ?? inv.invoice_no;
                   const amt = computeInvoiceTotal(inv);
                   return (
-                    <tr key={id} className="border-t">
+                    <tr key={String(id)}>
                       <td className="p-2">{formatIndianDate(inv.invoice_date ?? inv.created_at ?? inv.date)}</td>
                       <td className="p-2">{inv.invoice_no ?? inv.invoiceNo}</td>
                       <td className="p-2">{inv.party_name ?? inv.partyName ?? (inv.party && inv.party.name) ?? inv.customer_name ?? ""}</td>
-                      <td className="p-2">₹ {Number(amt || 0).toFixed(2)}</td>
+                      <td className="p-2">{formatCurrencyINR(amt)}</td>
                       <td className="p-2">
                         <button className="px-2 py-1 border rounded mr-2" onClick={() => openEdit(id)}>
                           Edit
@@ -245,8 +252,8 @@ export default function InvoicesPage() {
 
       {showForm && (
         <div className="bg-white rounded shadow p-4">
-          <InvoiceForm
-            invoiceId={editingId}
+          <InvoiceEditor
+            initialInvoice={editingInvoiceObject}
             onSaved={() => {
               setShowForm(false);
               setEditingId(null);

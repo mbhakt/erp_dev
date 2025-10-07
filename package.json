@@ -10,8 +10,11 @@
     "api:dev": "nodemon server.js"
   },
   "dependencies": {
+    "@ant-design/icons": "^6.1.0",
+    "antd": "^5.27.4",
     "axios": "^1.4.0",
     "cors": "^2.8.5",
+    "dayjs": "^1.11.18",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
     "framer-motion": "^12.23.13",
@@ -24,8 +27,10 @@
     "react-parallax-tilt": "^1.7.308",
     "react-router-dom": "^7.9.0",
     "react-tsparticles": "^2.12.2",
+    "recharts": "^3.2.1",
     "tsparticles": "^3.9.1",
-    "vanilla-tilt": "^1.8.1"
+    "vanilla-tilt": "^1.8.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.13",

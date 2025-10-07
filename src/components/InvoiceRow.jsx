@@ -18,7 +18,7 @@ export default function InvoiceRow({ invoice, onPreview, onDelete }) {
       </td>
 
       <td className="px-4 py-3 text-sm text-right text-gray-800">
-        ₹{Number(invoice.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+        {formatCurrencyINR(Number(invoice.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2 )})}
       </td>
 
       <td className="px-4 py-3 text-sm text-right">

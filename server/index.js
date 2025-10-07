@@ -11,6 +11,7 @@ const cors = require("cors");
 const bodyParser = require("body-parser");
 const partiesRouter = require('./routes/parties');
 const purchasesRouter = require('./routes/purchases');
+const itemsRouter = require('./routes/items');
 
 const app = express();
 app.use(cors());
@@ -19,7 +20,7 @@ app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use("/api/parties", partiesRouter);
 app.use('/api/purchases', purchasesRouter);
-app.use("/api/items", require("./routes/items"));
+app.use("/api/items", itemsRouter);
 
 
 // Create pool

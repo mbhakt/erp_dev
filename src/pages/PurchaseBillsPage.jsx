@@ -1,80 +1,61 @@
-// src/pages/PurchaseBillsPage.jsx
-import React, { useEffect, useState } from "react";
-import AppLayout from "../components/AppLayout";
-import PurchaseModal from "../components/PurchaseModal";
-import {
-  fetchPurchases,
-  createPurchase,
-  updatePurchase,
-  deletePurchase,
-} from "../api";
+import React, { useEffect, useState } from 'react';
+import AppLayout from '../components/AppLayout';
+import { Card, Button, message } from 'antd';
+import BillHeader from '../components/BillHeader';
+import EditableTable from '../components/EditableTable';
+import TotalSummaryCard from '../components/TotalSummaryCard';
+import BottomButtonBar from '../components/BottomButtonBar';
+import * as api from '../api/index';
+import { calcTax } from '../utils/gstCalc';
+import dayjs from 'dayjs';
 
 export default function PurchaseBillsPage() {
-  const [purchases, setPurchases] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [localModalOpen, setLocalModalOpen] = useState(false);
-  const [localEditPurchase, setLocalEditPurchase] = useState(null);
-  const [saving, setSaving] = useState(false); // new saving state
-
-  async function fetchPurchasesList() {
-    setLoading(true);
-    try {
-      const data = await fetchPurchases();
-      setPurchases(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("fetchPurchases error:", err);
-      setPurchases([]);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const [rows, setRows] = useState([]);
+  const [parties, setParties] = useState([]);
+  const [header, setHeader] = useState({});
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetchPurchasesList();
+    loadParties();
   }, []);
 
-  function handleAddPurchase() {
-    setLocalEditPurchase(null);
-    setLocalModalOpen(true);
-  }
-
-  function handleEditPurchase(purchase) {
-    setLocalEditPurchase(purchase);
-    setLocalModalOpen(true);
-  }
-
-  async function handleDeletePurchase(id) {
-    if (!window.confirm("Delete this purchase bill?")) return;
+  async function loadParties() {
     try {
-      await deletePurchase(id);
-      fetchPurchasesList();
-    } catch (err) {
-      console.error("Delete purchase error:", err);
+      const p = await (api.getParties ? api.getParties() : []);
+      setParties(p || []);
+    } catch (e) {
+      console.error(e);
     }
   }
 
-  // Called after successful save to refresh and close modal
-  function handleLocalSaved() {
-    setLocalModalOpen(false);
-    setLocalEditPurchase(null);
-    fetchPurchasesList();
-  }
+  const computeTotals = () => {
+    const subtotal = rows.reduce((s, r) => s + (Number(r.qty || 0) * Number(r.rate || 0)), 0);
+    const tax = rows.reduce((s, r) => s + calcTax(Number(r.qty || 0) * Number(r.rate || 0), Number(r.tax_percent || 0)), 0);
+    const grand = +(subtotal + tax).toFixed(2);
+    return { subtotal, tax, grand };
+  };
 
-  // NEW: onSave function passed to PurchaseModal (fixes onSave is not a function)
-  const onSave = async (formData) => {
+  const handleSave = async (stay) => {
     setSaving(true);
     try {
-      if (localEditPurchase && localEditPurchase.id) {
-        await updatePurchase(localEditPurchase.id, formData);
+      const payload = {
+        bill_no: header.bill_no || 'PB-' + String(Date.now()).slice(-6),
+        bill_date: header.bill_date ? dayjs(header.bill_date).format('YYYY-MM-DD') : dayjs().format('YYYY-MM-DD'),
+        party_id: header.party_id || null,
+        payment_mode: header.payment_mode || 'Cash',
+        items: rows.map((r) => ({ item_id: r.item_id, qty: r.qty, rate: r.rate, tax_percent: r.tax_percent })),
+      };
+      if (api.createPurchaseBill) await api.createPurchaseBill(payload);
+      message.success('Saved');
+      if (stay) {
+        setRows([]);
       } else {
-        await createPurchase(formData);
+        // navigate back or refresh list - left intentionally simple
+        window.location.reload();
       }
-      // refresh list and close modal
-      handleLocalSaved();
-    } catch (err) {
-      console.error("Purchase save failed:", err);
-      // rethrow if you want the modal to handle errors, or just keep it logged
-      throw err;
+    } catch (e) {
+      console.error(e);
+      message.error('Save failed');
     } finally {
       setSaving(false);
     }
@@ -82,80 +63,35 @@ export default function PurchaseBillsPage() {
 
   return (
     <AppLayout>
-      <div className="p-4">
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-xl font-semibold">Purchase Bills</h1>
-          <button
-            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
-            onClick={handleAddPurchase}
-            aria-label="Add Purchase"
-          >
-            + Add Purchase
-          </button>
+      <div style={{ padding: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2>Purchase Bills</h2>
+          <Button onClick={() => window.location.reload()}>Refresh</Button>
         </div>
 
-        {loading ? (
-          <div className="text-gray-600">Loading...</div>
-        ) : purchases.length === 0 ? (
-          <div className="text-gray-500">No purchase bills yet.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full border border-gray-200 bg-white">
-              <thead>
-                <tr className="bg-gray-100 text-left">
-                  <th className="p-2 border">Bill No</th>
-                  <th className="p-2 border">Vendor</th>
-                  <th className="p-2 border">Bill Date</th>
-                  <th className="p-2 border text-right">Total</th>
-                  <th className="p-2 border">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {purchases.map((p) => (
-                  <tr key={p.id} className="hover:bg-gray-50">
-                    <td className="p-2 border">{p.bill_no}</td>
-                    <td className="p-2 border">{p.vendor_name}</td>
-                    <td className="p-2 border">
-                      {p.bill_date
-                        ? new Date(p.bill_date).toLocaleDateString("en-GB")
-                        : "-"}
-                    </td>
-                    <td className="p-2 border text-right">
-  {Number(p.grand_total || p.total_amount || 0).toFixed(2)}
-</td>
-                    <td className="p-2 border">
-                      <button
-                        className="text-sm text-blue-600 hover:underline mr-2"
-                        onClick={() => handleEditPurchase(p)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="text-sm text-red-600 hover:underline"
-                        onClick={() => handleDeletePurchase(p.id)}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <Card style={{ marginTop: 12 }}>
+          <BillHeader parties={parties} onValuesChange={(vals) => setHeader(vals)} />
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <EditableTable rows={rows} setRows={setRows} items={[]} />
+            </div>
+            <div>
+              <TotalSummaryCard {...computeTotals()} />
+            </div>
           </div>
-        )}
+        </Card>
 
-        {localModalOpen && (
-          <PurchaseModal
-            open={true}
-            purchase={localEditPurchase}
-            onClose={() => {
-              setLocalModalOpen(false);
-              setLocalEditPurchase(null);
-            }}
-            onSave={onSave}            // now passes the function the modal expects
-            saving={saving}            // pass saving state so modal can disable Save
-          />
-        )}
+        <BottomButtonBar
+          onSaveExit={() => handleSave(false)}
+          onSaveNew={() => handleSave(true)}
+          onDelete={() => {}}
+          onClear={() => {
+            setRows([]);
+            setHeader({});
+          }}
+          onExit={() => window.history.back()}
+          loading={saving}
+        />
       </div>
     </AppLayout>
   );

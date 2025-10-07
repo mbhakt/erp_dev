@@ -19,15 +19,15 @@ export default function InvoicePreview({ invoice }) {
               <td className="py-2">{i+1}</td>
               <td>{it.name}</td>
               <td className="text-right">{it.qty}</td>
-              <td className="text-right">₹{Number(it.price).toFixed(2)}</td>
-              <td className="text-right">₹{(it.qty * it.price).toFixed(2)}</td>
+              <td className="text-right">{formatCurrencyINR(it.price)}</td>
+              <td className="text-right">{formatCurrencyINR((it.qty * it.price).toFixed(2))}</td>
             </tr>
           ))}
         </tbody>
         <tfoot>
           <tr className="border-t font-medium">
             <td colSpan={4} className="pt-2 text-right">Total</td>
-            <td className="pt-2 text-right">₹{total.toFixed(2)}</td>
+            <td className="pt-2 text-right">{formatCurrencyINR(total.toFixed(2))}</td>
           </tr>
         </tfoot>
       </table>

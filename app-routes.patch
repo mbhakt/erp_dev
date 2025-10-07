@@ -1,0 +1,33 @@
+
+*** Begin Patch
+*** Update File: src/App.jsx
+@@
+ import Dashboard from "./pages/Dashboard";
+ import Parties from "./pages/Parties";
+ import Items from "./pages/Items";
+ import SaleInvoices from "./pages/SaleInvoices";
+ import InvoiceEditor from "./pages/InvoiceEditor";
++import PurchaseBillsPage from "./pages/purchase/PurchaseBillsPage";
++import ExpensesPage from "./pages/purchase/ExpensesPage";
++import BankAccountsPage from "./pages/cashbank/BankAccountsPage";
++import CashInHandPage from "./pages/cashbank/CashInHandPage";
++import ReportsHomePage from "./pages/reports/ReportsHomePage";
++import SyncSharePage from "./pages/syncbackup/SyncSharePage";
++import ImportItemsPage from "./pages/utilities/ImportItemsPage";
++import SettingsGeneralPage from "./pages/settings/SettingsGeneralPage";
+@@
+         <Routes>
+           <Route path='/' element={<Dashboard/>}/>
+           <Route path='/parties' element={<Parties/>}/>
+@@
+         <Route path='/sale/invoices' element={<SaleInvoices/>}/>
+         <Route path='/sale/new' element={<InvoiceEditor/>}/>
++        <Route path='/purchase/bills' element={<PurchaseBillsPage/>}/>
++        <Route path='/purchase/expenses' element={<ExpensesPage/>}/>
++        <Route path='/cash/banks' element={<BankAccountsPage/>}/>
++        <Route path='/cash/cashin' element={<CashInHandPage/>}/>
++        <Route path='/reports' element={<ReportsHomePage/>}/>
++        <Route path='/sync/share' element={<SyncSharePage/>}/>
++        <Route path='/utils/import/items' element={<ImportItemsPage/>}/>
++        <Route path='/settings/general' element={<SettingsGeneralPage/>}/>
+*** End Patch
