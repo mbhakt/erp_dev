@@ -17,7 +17,7 @@ export default function SalesInvoicePage(){
   const [invoicePreview, setInvoicePreview] = useState(null);
 
   useEffect(()=>{ loadParties(); },[]);
-  async function loadParties(){ try{ const p = await (api.getParties?api.getParties():[]); setParties(p||[]); }catch(e){} }
+  async function loadParties(){ try{ const p = await (api.fetchParties?api.fetchParties():[]); setParties(p||[]); }catch(e){} }
 
   const computeTotals = ()=> {
     const subtotal = rows.reduce((s,r)=>s + (Number(r.qty||0)*Number(r.rate||0)),0);

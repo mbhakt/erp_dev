@@ -6,7 +6,7 @@ export const getDashboard = async ()=> {
   return { totalReceivable:700, totalPayable:0, totalSale:1000 };
 };
 
-export const getParties = async ()=> {
+export const fetchParties = async ()=> {
   await delay();
   return [
     { id:1,name:'Madhav Bhakta',phone:'9037248247',email:'mbhakt@gmail.com', balance:2555 },
@@ -22,7 +22,7 @@ export const getPartyTransactions = async (id)=> {
   ];
 };
 
-export const getItems = async ()=> {
+export const fetchItems = async ()=> {
   await delay();
   return [
     { id:'ACW001', name:'A4 Copier White', sale_price:210, purchase_price:0, stock:0 },

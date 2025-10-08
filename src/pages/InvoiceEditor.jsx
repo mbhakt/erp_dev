@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { Card, Input, Button, Table, InputNumber, Select } from 'antd';
 import { currencyINR } from '../utils/format';
-import { getItems } from '../api/mockApi';
+import { fetchItems } from '../api/mockApi';
 
 const { Option } = Select;
 
 export default function InvoiceEditor(){
   const [rows, setRows] = useState([{ id:null, name:'', qty:1, price:0, amount:0 }]);
   const [itemsList, setItemsList] = useState([]);
-  React.useEffect(()=>{ getItems().then(setItemsList); },[]);
+  React.useEffect(()=>{ fetchItems().then(setItemsList); },[]);
   const updateRow = (index, patch) => {
     const newRows = [...rows];
     newRows[index] = { ...newRows[index], ...patch };
