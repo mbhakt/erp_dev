@@ -209,7 +209,7 @@ export default function Sidebar({ onAddItem }) {
   return (
     <>
       <aside
-  className={`flex flex-col bg-slate-900 text-slate-100
+  className={`flex flex-col h-screen bg-slate-900 text-slate-100
     transition-[width] duration-500 ease-in-out
     ${collapsed ? "w-20" : "w-64"}`}
 >
@@ -264,7 +264,9 @@ export default function Sidebar({ onAddItem }) {
                       <button
                         onClick={(e) => handlePlusClick(e, m)}
                         title={`Add ${m.label}`}
-                        className="absolute right-1 top-1/2 -translate-y-1/2 bg-amber-500 p-1 rounded text-slate-900"
+                        className={`absolute right-1 top-1/2 -translate-y-1/2 bg-amber-500 p-1 rounded text-slate-900 ${
+                          collapsed ? "hidden" : ""
+                        }`}
                       >
                         <Plus className="w-3 h-3" />
                       </button>
@@ -351,7 +353,7 @@ export default function Sidebar({ onAddItem }) {
           </div>
         </nav>
 
-        <div className="px-4 py-3 border-t border-slate-800 transition-all duration-500">
+        <div className="mt-auto px-4 py-3 border-t border-slate-800 transition-all duration-500">
   {!collapsed ? (
     <>
       <div className="text-xs text-slate-400 transition-opacity duration-500 delay-100">

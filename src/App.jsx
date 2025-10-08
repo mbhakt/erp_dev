@@ -28,7 +28,7 @@ import CashInHandPage from "./pages/CashInHandPage";
 import ChequesPage from "./pages/ChequesPage";
 import LoanAccountsPage from "./pages/LoanAccountsPage";
 
-import ReportsHomePage from "./pages/ReportsHomePage";
+import ReportsPage from "./pages/ReportsPage";
 import TransactionReports from "./pages/TransactionReports";
 import PartyReports from "./pages/PartyReports";
 import GstReports from "./pages/GstReports";
@@ -106,7 +106,7 @@ export default function App() {
         <Route path="/cash/cheques" element={<ChequesPage />} />
         <Route path="/cash/loans" element={<LoanAccountsPage />} />
 
-        <Route path="/reports" element={<ReportsHomePage />} />
+        <Route path="/reports" element={<ReportsPage />} />
         <Route path="/reports/transactions" element={<TransactionReports />} />
         <Route path="/reports/party" element={<PartyReports />} />
         <Route path="/reports/gst" element={<GstReports />} />

@@ -18,9 +18,19 @@ export const currencyINR = (v) => {
   }).format(n);
 };
 
-export const formatDate = (value) => {
-  if (!value) return "";
-  return dayjs(value).format("DD-MM-YYYY");
+// export const formatDate = (value) => {
+//  if (!value) return "";
+//  return dayjs(value).format("DD-MM-YYYY");
+// };
+
+export const formatDateIndian = (isoOrDate) => {
+  if (!isoOrDate) return "";
+  const d = new Date(isoOrDate);
+  if (isNaN(d.getTime())) return "";
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
 };
 
 // sum helpers
