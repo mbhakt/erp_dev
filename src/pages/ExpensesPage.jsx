@@ -17,13 +17,7 @@ import {
   Col,
   Spin,
 } from "antd";
-import {
-  fetchExpenses,
-  createExpense,
-  updateExpense,
-  deleteExpense,
-  fetchParties,
-} from "../api";
+import { fetchExpenses, createExpense, updateExpense, deleteExpense, fetchParties } from '../api';
 import dayjs from "dayjs";
 import { currencyINR } from "../utils/format";
 import AppLayout from "../components/AppLayout";
@@ -53,7 +47,7 @@ export default function ExpensesPage() {
   async function loadList() {
     setLoading(true);
     try {
-      const resp = await getExpenses({ limit: 500 });
+      const resp = await fetchExpenses({ limit: 500 });
       const data = resp.data || resp;
       setRows(data);
     } catch (err) {

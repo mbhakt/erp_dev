@@ -1,7 +1,7 @@
 // src/pages/InvoicesPage.jsx
 import React, { useEffect, useState } from "react";
 import InvoiceEditor from "../pages/InvoiceEditor";
-import { fetchInvoices, deleteInvoice } from "../api";
+import { fetchInvoices, deleteInvoice } from '../api';
 import { formatCurrencyINR } from "../utils/format";
 
 // Format a date to DD-MM-YYYY (Indian format)

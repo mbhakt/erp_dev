@@ -1,13 +1,7 @@
 // src/pages/PartiesPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import AppLayout from "../components/AppLayout";
-import {
-  fetchParties,
-  createParty,
-  updateParty,
-  deleteParty,
-  fetchInvoices,
-} from "../api";
+import { fetchParties, createParty, updateParty, deleteParty, fetchInvoices } from '../api';
 import InvoiceForm from "../components/InvoiceForm"; // <-- existing invoice form component
 
 // helpers

@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import AppLayout from '../components/AppLayout';
 import { Card, Table, Button, Spin } from 'antd';
-import { getInvoices } from '../api/mockApi';
+import { fetchInvoices } from '../api/mockApi';
 import { currencyINR, formatDateIndian } from '../utils/format';
 
 export default function SaleInvoices(){
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
-  useEffect(()=>{ setLoading(true); getInvoices().then(d=>setData(d)).finally(()=>setLoading(false)); },[]);
+  useEffect(()=>{ setLoading(true); fetchInvoices().then(d=>setData(d)).finally(()=>setLoading(false)); },[]);
   const columns = [
     { title:'Date', dataIndex:'date', render: d=>formatDateIndian(d) },
     { title:'Invoice no', dataIndex:'invoice_no' },

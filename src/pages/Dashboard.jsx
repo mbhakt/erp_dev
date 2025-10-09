@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Row, Col, Card } from 'antd';
-import { getDashboard } from '../api/mockApi';
+import { fetchDashboard } from '../api/mockApi';
 import { currencyINR } from '../utils/format';
 import { LineChart, Line, ResponsiveContainer } from 'recharts';
-import { getReports } from '../api/mockApi';
+import { fetchReports } from '../api/mockApi';
 import AppLayout from '../components/AppLayout';
 
 export default function Dashboard(){
   const [summary, setSummary] = useState({});
   const [chartData, setChartData] = useState([]);
-  useEffect(()=>{ getDashboard().then(setSummary); getReports().then(r=>setChartData(r.sales||[])); },[]);
+  useEffect(()=>{ fetchDashboard().then(setSummary); fetchReports().then(r=>setChartData(r.sales||[])); },[]);
   return (
     <AppLayout>
       <div>

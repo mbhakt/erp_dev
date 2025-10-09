@@ -1,14 +1,7 @@
 // src/pages/ItemsPage.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import AppLayout from "../components/AppLayout";
-import {
-  fetchItems,
-  fetchItem,
-  createItem,
-  updateItem,
-  deleteItem,
-  fetchInvoices,
-} from "../api";
+import { fetchItems, fetchItem, createItem, updateItem, deleteItem, fetchInvoices } from '../api';
 
 // formatting helpers
 const currencyFmt = new Intl.NumberFormat("en-IN", {
@@ -37,7 +30,7 @@ export default function ItemsPage() {
 
   // right panel states
   const [mode, setMode] = useState("view"); // 'view' | 'edit' | 'new'
-  const [form, setForm] = useState(getEmptyForm());
+  const [form, setForm] = useState(fetchEmptyForm());
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -127,7 +120,7 @@ export default function ItemsPage() {
   // UI actions
   function startAdd() {
     setMode("new");
-    setForm(getEmptyForm());
+    setForm(fetchEmptyForm());
     setErrorMsg("");
     setTxSummary({ transactions: 0, soldQty: 0, soldValue: 0 });
   }
@@ -152,7 +145,7 @@ export default function ItemsPage() {
 
   function cancelEdit() {
     setMode("view");
-    setForm(getEmptyForm());
+    setForm(fetchEmptyForm());
     setErrorMsg("");
   }
 
@@ -196,7 +189,7 @@ export default function ItemsPage() {
       // reload and keep first item selection stable
       await loadItems();
       setMode("view");
-      setForm(getEmptyForm());
+      setForm(fetchEmptyForm());
       setErrorMsg("");
     } catch (err) {
       console.error("Save failed:", err);
@@ -227,14 +220,14 @@ export default function ItemsPage() {
   if (id == null) {
     setSelectedId(null);
     setMode("view");
-    setForm(getEmptyForm());
+    setForm(fetchEmptyForm());
     return;
   }
 
   // set selected id (string for stability)
   setSelectedId(String(id));
   setMode("view");
-  setForm(getEmptyForm());
+  setForm(fetchEmptyForm());
   setErrorMsg("");
   setTxSummary({ transactions: 0, soldQty: 0, soldValue: 0 });
   setTxError("");
@@ -551,7 +544,7 @@ export default function ItemsPage() {
   );
 }
 
-function getEmptyForm() {
+function fetchEmptyForm() {
   return {
     name: "",
     sku: "",

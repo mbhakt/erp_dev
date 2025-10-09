@@ -17,15 +17,7 @@ import {
   message,
   Spin,
 } from "antd";
-import {
-  fetchPurchases,
-  fetchPurchase,
-  createPurchase,
-  updatePurchase,
-  deletePurchase,
-  fetchParties,
-  fetchItems,
-} from "../api";
+import { fetchPurchases, fetchPurchase, createPurchase, updatePurchase, deletePurchase, fetchParties, fetchItems } from '../api';
 import dayjs from "dayjs";
 import { currencyINR } from "../utils/format";
 import AppLayout from "../components/AppLayout";

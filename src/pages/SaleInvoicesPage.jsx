@@ -1,7 +1,7 @@
 // src/pages/SaleInvoicesPage.jsx
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import InvoiceForm from "../components/InvoiceForm";
-import { fetchInvoices, deleteInvoice } from "../api";
+import { fetchInvoices, deleteInvoice } from '../api';
 import { canonicalId } from "../utils/normalize"; // keep if used elsewhere
 import { formatCurrencyINR } from "../utils/format";
 import AppLayout from "../components/AppLayout";

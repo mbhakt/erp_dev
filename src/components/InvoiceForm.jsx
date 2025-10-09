@@ -1,13 +1,6 @@
 // src/components/InvoiceForm.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  fetchParties,
-  fetchItems,
-  createInvoice,
-  updateInvoice,
-  fetchInvoice,
-  fetchInvoices,
-} from "../api";
+import { fetchParties, fetchItems, createInvoice, updateInvoice, fetchInvoice, fetchInvoices } from '../api';
 
 /* ---------- Small helpers ---------- */
 function fmtDateForInput(isoOrDate) {

@@ -1,7 +1,7 @@
 // Simple mock API: returns promises (simulate network)
 const delay = (ms=300)=>new Promise(r=>setTimeout(r,ms));
 
-export const getDashboard = async ()=> {
+export const fetchDashboard = async ()=> {
   await delay();
   return { totalReceivable:700, totalPayable:0, totalSale:1000 };
 };
@@ -14,7 +14,7 @@ export const fetchParties = async ()=> {
     { id:3,name:'Prakash Printers',phone:'7686878989',email:'', balance:0 }
   ];
 };
-export const getPartyTransactions = async (id)=> {
+export const fetchPartyTransactions = async (id)=> {
   await delay();
   return [
     { id:101, date:'2025-10-02', invoice_no:'006', party_name:'Madhav Bhakta', amount:610 },
@@ -31,7 +31,7 @@ export const fetchItems = async ()=> {
   ];
 };
 
-export const getInvoices = async ()=> {
+export const fetchInvoices = async ()=> {
   await delay();
   return [
     { id:6, invoice_no:'006', date:'2025-10-02', party_name:'Madhav Bhakta', total:610 },
@@ -40,7 +40,7 @@ export const getInvoices = async ()=> {
   ];
 };
 
-export const getPurchases = async ()=> {
+export const fetchPurchases = async ()=> {
   await delay();
   return [
     { id:3, bill_no:'3', vendor:'-', bill_date:'2025-10-03', total:24640 },
@@ -48,7 +48,7 @@ export const getPurchases = async ()=> {
   ];
 };
 
-export const getBanks = async ()=> {
+export const fetchBanks = async ()=> {
   await delay();
   return [
     { id:1, name:'Axis Bank', account:'1234567890', balance:50000 },
@@ -56,7 +56,7 @@ export const getBanks = async ()=> {
   ];
 };
 
-export const getReports = async ()=> {
+export const fetchReports = async ()=> {
   await delay();
   return { sales:[{name:'Week1', value:200},{name:'Week2', value:450},{name:'Week3', value:600}] };
 };

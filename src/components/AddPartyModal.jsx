@@ -1,6 +1,6 @@
 // src/components/AddPartyModal.jsx
 import React, { useEffect, useState } from "react";
-import { createParty, updateParty } from "../api"; // your api functions
+import { createParty, updateParty } from '../api'; // your api functions
 
 export default function AddPartyModal({ open, initial = null, onClose, onSave }) {
   const [form, setForm] = useState({

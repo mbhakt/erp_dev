@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { fetchPurchases, createPurchase, updatePurchase, deletePurchase, fetchParties, fetchItems } from "../api";
+import { fetchPurchases, createPurchase, updatePurchase, deletePurchase, fetchParties, fetchItems } from '../api';
 import PurchaseModal from "../components/PurchaseModal";
 
 export default function PurchasesPage() {
